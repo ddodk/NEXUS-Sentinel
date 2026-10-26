@@ -220,33 +220,31 @@ public sealed class ProcessDetailsWindow : Window
         panel.Children.Clear();
 
         AddSection(panel, "Проверка Authenticode");
+            
+string statusText = result.Status switch
+{
+    "Valid" =>
+        "Действительная подпись",
 
-        string statusText = result.Status switch
-        {
-            "Valid" =>
-                "Действительная подпись",
+    "NotSigned" =>
+        "Подпись отсутствует",
 
-            "NotSigned" =>
-                "Подпись отсутствует",
+    "HashMismatch" =>
+        "Хеш файла не соответствует подписи",
 
-            "HashMismatch" =>
-                "Хеш файла не соответствует подписи",
+    "NotTrusted" =>
+        "Подписант не считается доверенным",
 
-            "NotTrusted" =>
-                "Подписант не считается доверенным",
+    "UnknownError" =>
+        "Не удалось определить статус подписи",
 
-            "UnknownError" =>
-                "Не удалось определить статус подписи",
+    "CheckFailed" =>
+        "Проверка не завершена",
 
-            "CheckFailed" =>
-                "Проверка не завершена",
+    _ =>
+        $"Статус Windows: {result.Status}"
+};
 
-            "NotTrusted" =>
-                "Подписант не считается доверенным",
-
-            _ =>
-                $"Статус Windows: {result.Status}"
-        };
 
         AddField(panel, "Результат", statusText);
 
