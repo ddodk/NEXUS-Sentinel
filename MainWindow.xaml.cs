@@ -2,13 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using NEXUS.Sentinel.Data;
 using NEXUS.Sentinel.Diagnostics;
+using NEXUS.Sentinel.Services;
 
 namespace NEXUS.Sentinel;
 
@@ -27,15 +31,15 @@ public partial class MainWindow : Window
     private long _lastSampleTimestamp;
     private bool _isRefreshing;
     private bool _hasLoggedMonitorError;
+    private bool _isScanning;
+    private string? _lastSha256;
 
     public MainWindow()
     {
         InitializeComponent();
 
         ProcessGrid.ItemsSource = new List<ProcessRow>();
-
-        ProcessGrid.MouseDoubleClick +=
-            ProcessGrid_MouseDoubleClick;
+        ProcessGrid.MouseDoubleClick += ProcessGrid_MouseDoubleClick;
 
         _timer = new DispatcherTimer
         {
@@ -112,6 +116,109 @@ public partial class MainWindow : Window
         };
 
         window.ShowDialog();
+    }
+
+    private async void ScanFileButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_isScanning)
+            return;
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Выберите файл для вычисления SHA-256",
+            CheckFileExists = true,
+            CheckPathExists = true,
+            Multiselect = false,
+            Filter = "Все файлы (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        string path = dialog.FileName;
+
+        _isScanning = true;
+        _lastSha256 = null;
+        CopyHashButton.IsEnabled = false;
+        ScanFileButton.IsEnabled = false;
+        ScanFilePathText.Text = path;
+        Sha256Text.Text = "Вычисление...";
+        ScanResultText.Text = "Чтение файла и вычисление SHA-256...";
+        ScanResultText.Foreground =
+            System.Windows.Media.Brushes.LightBlue;
+
+        try
+        {
+            var result = await FileHashService.CalculateSha256Async(path);
+
+            if (result.Success)
+            {
+                _lastSha256 = result.Sha256;
+                Sha256Text.Text = result.Sha256;
+                CopyHashButton.IsEnabled = true;
+
+                string sizeText = FormatFileSize(result.FileSizeBytes);
+
+                ScanResultText.Text =
+                    $"Успешно • Размер: {sizeText} • " +
+                    $"Время: {result.CheckedAt:HH:mm:ss}";
+
+                ScanResultText.Foreground =
+                    System.Windows.Media.Brushes.LightGreen;
+
+                _eventStore.Add(
+                    "FileHashCalculated",
+                    $"Вычислен SHA-256 для файла: {Path.GetFileName(path)}");
+            }
+            else
+            {
+                Sha256Text.Text = "Хеш не получен";
+                ScanResultText.Text =
+                    result.Error ?? result.Status;
+
+                ScanResultText.Foreground =
+                    System.Windows.Media.Brushes.Orange;
+            }
+        }
+        catch (Exception ex)
+        {
+            Sha256Text.Text = "Хеш не получен";
+            ScanResultText.Text = $"Ошибка: {ex.Message}";
+            ScanResultText.Foreground =
+                System.Windows.Media.Brushes.Orange;
+        }
+        finally
+        {
+            _isScanning = false;
+            ScanFileButton.IsEnabled = true;
+        }
+    }
+
+    private void CopyHashButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_lastSha256))
+            return;
+
+        try
+        {
+            Clipboard.SetText(_lastSha256);
+            ScanResultText.Text = "SHA-256 скопирован в буфер обмена.";
+            ScanResultText.Foreground =
+                System.Windows.Media.Brushes.LightGreen;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось скопировать хеш: {ex.Message}",
+                "NEXUS Sentinel",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void RefreshProcesses()
@@ -200,9 +307,7 @@ public partial class MainWindow : Window
                                     * 100.0;
 
                                 cpuPercent = Math.Clamp(
-                                    cpuPercent,
-                                    0.0,
-                                    100.0);
+                                    cpuPercent, 0.0, 100.0);
 
                                 cpuText = $"{cpuPercent:F1} %";
                             }
@@ -231,7 +336,6 @@ public partial class MainWindow : Window
                 }
             }
 
-            // Записываем новые процессы и изменения имён.
             foreach (var item in currentProcesses)
             {
                 if (!_knownProcesses.TryGetValue(
@@ -252,7 +356,6 @@ public partial class MainWindow : Window
                 }
             }
 
-            // Фиксируем процессы, которые больше не видны.
             foreach (var item in _knownProcesses)
             {
                 if (!currentProcesses.ContainsKey(item.Key))
@@ -274,7 +377,6 @@ public partial class MainWindow : Window
             foreach (var sample in nextCpuSamples)
                 _previousCpu[sample.Key] = sample.Value;
 
-            // Фильтрация таблицы.
             string query = FilterBox.Text.Trim();
 
             var visibleRows = rows
@@ -292,12 +394,11 @@ public partial class MainWindow : Window
 
             ProcessGrid.ItemsSource = visibleRows;
 
-            _processStatus.MarkAvailable(
-                DataCompleteness.Partial);
+            _processStatus.MarkAvailable(DataCompleteness.Partial);
 
             StatusText.Text =
-                $"Процессов: {rows.Count}  •  " +
-                $"Показано: {visibleRows.Count}  •  " +
+                $"Процессов: {rows.Count} • " +
+                $"Показано: {visibleRows.Count} • " +
                 $"Обновлено: {DateTime.Now:HH:mm:ss}";
 
             _hasLoggedMonitorError = false;
@@ -315,13 +416,27 @@ public partial class MainWindow : Window
                 _hasLoggedMonitorError = true;
             }
 
-            StatusText.Text =
-                $"Ошибка мониторинга: {ex.Message}";
+            StatusText.Text = $"Ошибка мониторинга: {ex.Message}";
         }
         finally
         {
             _isRefreshing = false;
         }
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double size = bytes;
+        int unit = 0;
+
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+
+        return $"{size:F2} {units[unit]}";
     }
 }
 
