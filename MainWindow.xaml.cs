@@ -1,10 +1,14 @@
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using NEXUS.Sentinel.Data;
+using NEXUS.Sentinel.Diagnostics;
 
 namespace NEXUS.Sentinel;
 
@@ -12,8 +16,16 @@ public partial class MainWindow : Window
 {
     private readonly DispatcherTimer _timer;
     private readonly Dictionary<int, TimeSpan> _previousCpu = new();
+    private readonly Dictionary<int, string> _knownProcesses = new();
+    private readonly EventStore _eventStore = new();
+    private readonly DataSourceStatus _processStatus = new()
+    {
+        Name = "Windows Process Monitor"
+    };
+
     private long _lastSampleTimestamp;
     private bool _isRefreshing;
+    private bool _hasLoggedMonitorError;
 
     public MainWindow()
     {
@@ -30,11 +42,19 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) =>
         {
+            _eventStore.Add("MonitorStarted",
+                "NEXUS Sentinel начал мониторинг процессов.");
+
             RefreshProcesses();
             _timer.Start();
         };
 
-        Closed += (_, _) => _timer.Stop();
+        Closed += (_, _) =>
+        {
+            _timer.Stop();
+            _eventStore.Add("MonitorStopped",
+                "Мониторинг процессов остановлен.");
+        };
     }
 
     private void FilterBox_TextChanged(
@@ -80,6 +100,7 @@ public partial class MainWindow : Window
 
             var nextCpuSamples = new Dictionary<int, TimeSpan>();
             var rows = new List<ProcessRow>();
+            var currentProcesses = new Dictionary<int, string>();
 
             foreach (Process process in Process.GetProcesses())
             {
@@ -122,6 +143,8 @@ public partial class MainWindow : Window
                         {
                         }
 
+                        currentProcesses[id] = name;
+
                         string cpuText = "Сбор данных";
 
                         if (hasCpuTime)
@@ -161,9 +184,45 @@ public partial class MainWindow : Window
                     }
                     catch
                     {
+                        // Процесс мог завершиться во время чтения.
                     }
                 }
             }
+
+            foreach (var item in currentProcesses)
+            {
+                if (!_knownProcesses.TryGetValue(
+                        item.Key, out string? previousName))
+                {
+                    _eventStore.Add(
+                        "ProcessObserved",
+                        $"Обнаружен процесс: {item.Value}",
+                        item.Key);
+                }
+                else if (previousName != item.Value)
+                {
+                    _eventStore.Add(
+                        "ProcessChanged",
+                        $"Для PID {item.Key} изменилось имя процесса.",
+                        item.Key);
+                }
+            }
+
+            foreach (var item in _knownProcesses)
+            {
+                if (!currentProcesses.ContainsKey(item.Key))
+                {
+                    _eventStore.Add(
+                        "ProcessNoLongerVisible",
+                        $"Процесс больше не обнаружен: {item.Value}",
+                        item.Key);
+                }
+            }
+
+            _knownProcesses.Clear();
+
+            foreach (var item in currentProcesses)
+                _knownProcesses[item.Key] = item.Value;
 
             _previousCpu.Clear();
 
@@ -185,6 +244,8 @@ public partial class MainWindow : Window
 
             ProcessGrid.ItemsSource = visibleRows;
 
+            _processStatus.MarkAvailable(DataCompleteness.Partial);
+
             StatusText.Text =
                 $"Процессов: {rows.Count}  •  " +
                 $"Показано: {visibleRows.Count}  •  " +
@@ -192,6 +253,17 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _processStatus.MarkError(ex.Message);
+
+            if (!_hasLoggedMonitorError)
+            {
+                _eventStore.Add(
+                    "MonitorError",
+                    $"Ошибка мониторинга: {ex.Message}");
+
+                _hasLoggedMonitorError = true;
+            }
+
             StatusText.Text = $"Ошибка мониторинга: {ex.Message}";
         }
         finally
