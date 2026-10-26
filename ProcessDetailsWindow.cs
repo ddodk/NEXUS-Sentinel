@@ -1,7 +1,8 @@
+
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -18,7 +19,7 @@ public sealed class ProcessDetailsWindow : Window
 
         Title = $"NEXUS Sentinel — {_row.ProcessName}";
         Width = 720;
-        Height = 620;
+        Height = 700;
         MinWidth = 520;
         MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -86,42 +87,97 @@ public sealed class ProcessDetailsWindow : Window
         AddField(content, "Загрузка CPU", _row.CpuText);
         AddField(content, "Путь к файлу", _row.PathText);
 
-        AddSection(content, "Сведения о файле");
+        AddSection(content, "Метаданные файла");
 
         string path = _row.PathText;
 
-        if (string.IsNullOrWhiteSpace(path)
-            || path == "Недоступен"
-            || !File.Exists(path))
+        bool fileAvailable =
+            !string.IsNullOrWhiteSpace(path)
+            && path != "Недоступен"
+            && File.Exists(path);
+
+        if (fileAvailable)
+        {
+            try
+            {
+                var version = FileVersionInfo.GetVersionInfo(path);
+
+                AddField(
+                    content,
+                    "Описание",
+                    EmptyAsUnavailable(version.FileDescription));
+
+                AddField(
+                    content,
+                    "Версия файла",
+                    EmptyAsUnavailable(version.FileVersion));
+
+                AddField(
+                    content,
+                    "Компания",
+                    EmptyAsUnavailable(version.CompanyName));
+
+                AddField(
+                    content,
+                    "Размер файла",
+                    $"{new FileInfo(path).Length / 1024.0:F1} KB");
+            }
+            catch (Exception ex)
+            {
+                AddField(
+                    content,
+                    "Метаданные",
+                    $"Недоступны: {ex.Message}");
+            }
+
+            try
+            {
+                using Process process =
+                    Process.GetProcessById(_row.Id);
+
+                AddField(
+                    content,
+                    "Время запуска",
+                    process.StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            }
+            catch
+            {
+                AddField(
+                    content,
+                    "Время запуска",
+                    "Недоступно: доступ ограничен или процесс завершился.");
+            }
+        }
+        else
         {
             AddField(
                 content,
                 "Файл",
                 "Путь недоступен или файл уже не существует.");
-
-            AddField(
-                content,
-                "Время запуска",
-                "Недоступно");
-
-            AddField(
-                content,
-                "Сведения о сертификате",
-                "Файл недоступен для проверки.");
         }
-        else
-        {
-            ReadFileDetails(content, path);
-        }
+
+        var signaturePanel = new StackPanel();
+
+        AddSection(signaturePanel, "Проверка Authenticode");
+
+        AddField(
+            signaturePanel,
+            "Статус",
+            fileAvailable
+                ? "Проверка выполняется..."
+                : "Невозможно проверить: файл недоступен.");
+
+        content.Children.Add(signaturePanel);
 
         content.Children.Add(new TextBlock
         {
             Text =
-                "Важно: наличие сертификата само по себе не " +
-                "подтверждает безопасность файла. Полноценная " +
-                "проверка цифровой подписи Authenticode здесь " +
-                "не выполняется. Отсутствие сертификата не " +
-                "доказывает, что файл вредоносный.",
+                "Действительная подпись не гарантирует безопасность " +
+                "программы. Отсутствие подписи само по себе не " +
+                "означает, что файл вредоносный. Для проверки " +
+                "используется системный механизм Windows; проверка " +
+                "может зависеть от доступности сертификатов и " +
+                "инфраструктуры доверия.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = CreateBrush("#E9C878"),
             Background = CreateBrush("#202033"),
@@ -133,101 +189,119 @@ public sealed class ProcessDetailsWindow : Window
         root.Children.Add(scroll);
 
         Content = root;
+
+        if (fileAvailable)
+            _ = LoadSignatureAsync(signaturePanel, path);
     }
 
-    private void ReadFileDetails(
-        Panel content,
+    private async Task LoadSignatureAsync(
+        Panel panel,
         string path)
     {
+        AuthenticodeResult result;
+
         try
         {
-            var version = FileVersionInfo.GetVersionInfo(path);
-
-            AddField(
-                content,
-                "Описание",
-                EmptyAsUnavailable(version.FileDescription));
-
-            AddField(
-                content,
-                "Версия файла",
-                EmptyAsUnavailable(version.FileVersion));
-
-            AddField(
-                content,
-                "Компания",
-                EmptyAsUnavailable(version.CompanyName));
-
-            var fileInfo = new FileInfo(path);
-
-            AddField(
-                content,
-                "Размер файла",
-                $"{fileInfo.Length / 1024.0:F1} KB");
+            result = await Task.Run(
+                () => AuthenticodeVerifier.Verify(path));
         }
         catch (Exception ex)
         {
-            AddField(
-                content,
-                "Метаданные файла",
-                $"Недоступны: {ex.Message}");
+            result = new AuthenticodeResult
+            {
+                Status = "CheckFailed",
+                Error = ex.Message
+            };
         }
 
-        try
+        if (!IsLoaded)
+            return;
+
+        panel.Children.Clear();
+
+        AddSection(panel, "Проверка Authenticode");
+
+        string statusText = result.Status switch
         {
-            using Process process =
-                Process.GetProcessById(_row.Id);
+            "Valid" =>
+                "Действительная подпись",
 
-            DateTime startTime = process.StartTime;
+            "NotSigned" =>
+                "Подпись отсутствует",
 
+            "HashMismatch" =>
+                "Хеш файла не соответствует подписи",
+
+            "NotTrusted" =>
+                "Подписант не считается доверенным",
+
+            "UnknownError" =>
+                "Не удалось определить статус подписи",
+
+            "CheckFailed" =>
+                "Проверка не завершена",
+
+            "NotTrusted" =>
+                "Подписант не считается доверенным",
+
+            _ =>
+                $"Статус Windows: {result.Status}"
+        };
+
+        AddField(panel, "Результат", statusText);
+
+        if (!string.IsNullOrWhiteSpace(result.StatusMessage))
+        {
             AddField(
-                content,
-                "Время запуска",
-                startTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                panel,
+                "Сообщение Windows",
+                result.StatusMessage);
         }
-        catch
+
+        if (!string.IsNullOrWhiteSpace(result.Signer))
         {
             AddField(
-                content,
-                "Время запуска",
-                "Недоступно: доступ ограничен или процесс завершился.");
+                panel,
+                "Подписант",
+                result.Signer);
         }
 
-        try
+        if (!string.IsNullOrWhiteSpace(result.Issuer))
         {
-            using X509Certificate certificate =
-                X509Certificate.CreateFromSignedFile(path);
-
             AddField(
-                content,
-                "Субъект сертификата",
-                certificate.Subject);
-
-            AddField(
-                content,
+                panel,
                 "Издатель сертификата",
-                certificate.Issuer);
-
-            using var certificate2 =
-                new X509Certificate2(certificate);
-
-            AddField(
-                content,
-                "Срок действия сертификата",
-                $"{certificate2.NotBefore:yyyy-MM-dd} — " +
-                $"{certificate2.NotAfter:yyyy-MM-dd}");
-
-            AddField(
-                content,
-                "Статус проверки подписи",
-                "Криптографическая проверка не выполнялась.");
+                result.Issuer);
         }
-        catch
+
+        if (!string.IsNullOrWhiteSpace(result.NotBefore)
+            && DateTimeOffset.TryParse(
+                result.NotBefore,
+                out DateTimeOffset notBefore))
         {
             AddField(
-                content,
-                "Сведения о сертификате",
-                "Сертификат не найден или его не удалось прочитать.");
+                panel,
+                "Сертификат действителен с",
+                notBefore.ToLocalTime().ToString("yyyy-MM-dd"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.NotAfter)
+            && DateTimeOffset.TryParse(
+                result.NotAfter,
+                out DateTimeOffset notAfter))
+        {
+            AddField(
+                panel,
+                "Сертификат действителен до",
+                notAfter.ToLocalTime().ToString("yyyy-MM-dd"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.Error))
+        {
+            AddField(
+                panel,
+                "Ошибка",
+                result.Error);
         }
     }
 
@@ -287,8 +361,7 @@ public sealed class ProcessDetailsWindow : Window
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
             Foreground = CreateBrush("#F2F5FF"),
-            Padding = new Thickness(0),
-            IsReadOnlyCaretVisible = false
+            Padding = new Thickness(0)
         });
 
         card.Child = stack;
@@ -301,4 +374,3 @@ public sealed class ProcessDetailsWindow : Window
             (Color)ColorConverter.ConvertFromString(color));
     }
 }
-
