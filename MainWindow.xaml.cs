@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using NEXUS.Sentinel.Data;
 using NEXUS.Sentinel.Diagnostics;
@@ -32,6 +33,9 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         ProcessGrid.ItemsSource = new List<ProcessRow>();
+
+        ProcessGrid.MouseDoubleClick +=
+            ProcessGrid_MouseDoubleClick;
 
         _timer = new DispatcherTimer
         {
@@ -95,6 +99,21 @@ public partial class MainWindow : Window
         window.ShowDialog();
     }
 
+    private void ProcessGrid_MouseDoubleClick(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        if (ProcessGrid.SelectedItem is not ProcessRow row)
+            return;
+
+        var window = new ProcessDetailsWindow(row)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }
+
     private void RefreshProcesses()
     {
         if (_isRefreshing)
@@ -138,6 +157,7 @@ public partial class MainWindow : Window
                         }
                         catch
                         {
+                            // Доступ к памяти может быть ограничен.
                         }
 
                         try
@@ -147,6 +167,7 @@ public partial class MainWindow : Window
                         }
                         catch
                         {
+                            // Доступ к CPU может быть ограничен.
                         }
 
                         try
@@ -158,6 +179,7 @@ public partial class MainWindow : Window
                         }
                         catch
                         {
+                            // Путь может быть недоступен.
                         }
 
                         currentProcesses[id] = name;
@@ -178,7 +200,9 @@ public partial class MainWindow : Window
                                     * 100.0;
 
                                 cpuPercent = Math.Clamp(
-                                    cpuPercent, 0.0, 100.0);
+                                    cpuPercent,
+                                    0.0,
+                                    100.0);
 
                                 cpuText = $"{cpuPercent:F1} %";
                             }
@@ -207,6 +231,7 @@ public partial class MainWindow : Window
                 }
             }
 
+            // Записываем новые процессы и изменения имён.
             foreach (var item in currentProcesses)
             {
                 if (!_knownProcesses.TryGetValue(
@@ -227,6 +252,7 @@ public partial class MainWindow : Window
                 }
             }
 
+            // Фиксируем процессы, которые больше не видны.
             foreach (var item in _knownProcesses)
             {
                 if (!currentProcesses.ContainsKey(item.Key))
@@ -248,6 +274,7 @@ public partial class MainWindow : Window
             foreach (var sample in nextCpuSamples)
                 _previousCpu[sample.Key] = sample.Value;
 
+            // Фильтрация таблицы.
             string query = FilterBox.Text.Trim();
 
             var visibleRows = rows
