@@ -1,4 +1,3 @@
-
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -23,8 +22,8 @@ public sealed class ProcessDetailsWindow : Window
         MinWidth = 520;
         MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brush("#080B12");
-        Foreground = Brush("#F2F5FF");
+        Background = CreateBrush("#080B12");
+        Foreground = CreateBrush("#F2F5FF");
 
         var root = new DockPanel
         {
@@ -42,12 +41,13 @@ public sealed class ProcessDetailsWindow : Window
         {
             Content = "Закрыть",
             Padding = new Thickness(20, 9, 20, 9),
-            Background = Brush("#776BFF"),
+            Background = CreateBrush("#776BFF"),
             Foreground = Brushes.White,
             BorderThickness = new Thickness(0)
         };
 
         closeButton.Click += (_, _) => Close();
+
         footer.Children.Add(closeButton);
 
         DockPanel.SetDock(footer, Dock.Bottom);
@@ -55,7 +55,8 @@ public sealed class ProcessDetailsWindow : Window
 
         var scroll = new ScrollViewer
         {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            VerticalScrollBarVisibility =
+                ScrollBarVisibility.Auto
         };
 
         var content = new StackPanel();
@@ -72,11 +73,13 @@ public sealed class ProcessDetailsWindow : Window
         {
             Text = "Сведения, доступные текущему пользователю Windows",
             FontSize = 12,
-            Foreground = Brush("#96A3BB"),
-            Margin = new Thickness(0, 0, 0, 18)
+            Foreground = CreateBrush("#96A3BB"),
+            Margin = new Thickness(0, 0, 0, 18),
+            TextWrapping = TextWrapping.Wrap
         });
 
         AddSection(content, "Основные сведения");
+
         AddField(content, "Имя процесса", _row.ProcessName);
         AddField(content, "PID", _row.Id.ToString());
         AddField(content, "Память", _row.MemoryText);
@@ -85,7 +88,7 @@ public sealed class ProcessDetailsWindow : Window
 
         AddSection(content, "Сведения о файле");
 
-        string? path = _row.PathText;
+        string path = _row.PathText;
 
         if (string.IsNullOrWhiteSpace(path)
             || path == "Недоступен"
@@ -103,13 +106,8 @@ public sealed class ProcessDetailsWindow : Window
 
             AddField(
                 content,
-                "Версия и издатель",
-                "Недоступны");
-
-            AddField(
-                content,
-                "Сертификат",
-                "Не удалось проверить: файл недоступен.");
+                "Сведения о сертификате",
+                "Файл недоступен для проверки.");
         }
         else
         {
@@ -119,23 +117,25 @@ public sealed class ProcessDetailsWindow : Window
         content.Children.Add(new TextBlock
         {
             Text =
-                "Важно: сведения о сертификате сами по себе " +
-                "не подтверждают подлинность файла. Эта карточка " +
-                "не выполняет полноценную проверку Authenticode " +
-                "и не определяет, является ли процесс вредоносным.",
+                "Важно: наличие сертификата само по себе не " +
+                "подтверждает безопасность файла. Полноценная " +
+                "проверка цифровой подписи Authenticode здесь " +
+                "не выполняется. Отсутствие сертификата не " +
+                "доказывает, что файл вредоносный.",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = Brush("#E9C878"),
-            Background = Brush("#202033"),
+            Foreground = CreateBrush("#E9C878"),
+            Background = CreateBrush("#202033"),
             Padding = new Thickness(12),
             Margin = new Thickness(0, 16, 0, 8)
         });
 
         scroll.Content = content;
         root.Children.Add(scroll);
+
         Content = root;
     }
 
-    private static void ReadFileDetails(
+    private void ReadFileDetails(
         Panel content,
         string path)
     {
@@ -158,10 +158,12 @@ public sealed class ProcessDetailsWindow : Window
                 "Компания",
                 EmptyAsUnavailable(version.CompanyName));
 
+            var fileInfo = new FileInfo(path);
+
             AddField(
                 content,
                 "Размер файла",
-                $"{new FileInfo(path).Length / 1024.0:F1} KB");
+                $"{fileInfo.Length / 1024.0:F1} KB");
         }
         catch (Exception ex)
         {
@@ -173,22 +175,22 @@ public sealed class ProcessDetailsWindow : Window
 
         try
         {
-            using Process process = Process.GetProcessById(
-                GetCurrentPidForLookup(content, path));
+            using Process process =
+                Process.GetProcessById(_row.Id);
 
             DateTime startTime = process.StartTime;
 
             AddField(
                 content,
                 "Время запуска",
-                startTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
+                startTime.ToString("yyyy-MM-dd HH:mm:ss"));
         }
         catch
         {
             AddField(
                 content,
                 "Время запуска",
-                "Недоступно: Windows ограничила доступ или процесс завершился.");
+                "Недоступно: доступ ограничен или процесс завершился.");
         }
 
         try
@@ -206,13 +208,14 @@ public sealed class ProcessDetailsWindow : Window
                 "Издатель сертификата",
                 certificate.Issuer);
 
-            using var certificate2 = new X509Certificate2(certificate);
+            using var certificate2 =
+                new X509Certificate2(certificate);
 
             AddField(
                 content,
                 "Срок действия сертификата",
-                $"{certificate2.NotBefore.ToLocalTime():yyyy-MM-dd} — " +
-                $"{certificate2.NotAfter.ToLocalTime():yyyy-MM-dd}");
+                $"{certificate2.NotBefore:yyyy-MM-dd} — " +
+                $"{certificate2.NotAfter:yyyy-MM-dd}");
 
             AddField(
                 content,
@@ -224,14 +227,8 @@ public sealed class ProcessDetailsWindow : Window
             AddField(
                 content,
                 "Сведения о сертификате",
-                "Сертификат не найден или его не удалось прочитать. " +
-                "Это не доказывает, что файл вредоносный.");
+                "Сертификат не найден или его не удалось прочитать.");
         }
-    }
-
-    private int GetCurrentPidForLookup(Panel content, string path)
-    {
-        return _row.Id;
     }
 
     private static string EmptyAsUnavailable(string? value)
@@ -241,14 +238,16 @@ public sealed class ProcessDetailsWindow : Window
             : value;
     }
 
-    private static void AddSection(Panel panel, string title)
+    private static void AddSection(
+        Panel panel,
+        string title)
     {
         panel.Children.Add(new TextBlock
         {
             Text = title,
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
-            Foreground = Brush("#A9A0FF"),
+            Foreground = CreateBrush("#A9A0FF"),
             Margin = new Thickness(0, 12, 0, 8)
         });
     }
@@ -260,8 +259,8 @@ public sealed class ProcessDetailsWindow : Window
     {
         var card = new Border
         {
-            Background = Brush("#151C2D"),
-            BorderBrush = Brush("#28344B"),
+            Background = CreateBrush("#151C2D"),
+            BorderBrush = CreateBrush("#28344B"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(7),
             Padding = new Thickness(11),
@@ -274,25 +273,32 @@ public sealed class ProcessDetailsWindow : Window
         {
             Text = label,
             FontSize = 11,
-            Foreground = Brush("#96A3BB")
+            Foreground = CreateBrush("#96A3BB"),
+            TextWrapping = TextWrapping.Wrap
         });
 
-        stack.Children.Add(new TextBlock
+        stack.Children.Add(new TextBox
         {
             Text = value,
             FontSize = 13,
             Margin = new Thickness(0, 4, 0, 0),
             TextWrapping = TextWrapping.Wrap,
-            IsTextSelectionEnabled = true
+            IsReadOnly = true,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = CreateBrush("#F2F5FF"),
+            Padding = new Thickness(0),
+            IsReadOnlyCaretVisible = false
         });
 
         card.Child = stack;
         panel.Children.Add(card);
     }
 
-    private static SolidColorBrush Brush(string color)
+    private static SolidColorBrush CreateBrush(string color)
     {
         return new SolidColorBrush(
             (Color)ColorConverter.ConvertFromString(color));
     }
 }
+
