@@ -1,0 +1,17 @@
+<Application x:Class="NEXUS.Sentinel.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="BackgroundColor"
+                         Color="#090D18"/>
+        <SolidColorBrush x:Key="PanelColor"
+                         Color="#151C2D"/>
+        <SolidColorBrush x:Key="AccentColor"
+                         Color="#8175FF"/>
+        <SolidColorBrush x:Key="TextColor"
+                         Color="#F0F3FF"/>
+        <SolidColorBrush x:Key="MutedColor"
+                         Color="#9AA8C2"/>
+    </Application.Resources>
+</Application>
