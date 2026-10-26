@@ -365,105 +365,101 @@
                     Margin="0,0,0,16">
 
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="0" Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+    <Grid Grid.Row="0" Margin="0,0,0,14">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
 
-                        <StackPanel>
-                            <TextBlock Text="Сканер файлов"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="#F1F6FF"/>
-                            <TextBlock Text="Вычисление криптографического SHA-256"
-                                       FontSize="11"
-                                       Foreground="#8293AA"
-                                       Margin="0,4,0,0"/>
-                        </StackPanel>
+        <StackPanel>
+            <TextBlock Text="Сканер файлов"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Foreground="#F1F6FF"/>
 
-                        <Border Grid.Column="1"
-                                Background="#102D3B"
-                                CornerRadius="5"
-                                Padding="9,5"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="SHA-256"
-                                       Foreground="#69D9FF"
-                                       FontSize="10"
-                                       FontWeight="Bold"/>
-                        </Border>
-                    </Grid>
+            <TextBlock Text="Вычисление криптографического SHA-256"
+                       FontSize="11"
+                       Foreground="#8293AA"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
 
-                <Grid Grid.Row="1" Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Border Background="#0B1320"
-                                BorderBrush="#26384B"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="10,8"
-                                Margin="0,0,8,0">
-                            <TextBlock x:Name="ScanFilePathText"
-                                       Text="Файл не выбран"
-                                       Foreground="#A5B6CB"
-                                       FontSize="11"
-                                       TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-
-                        <Button x:Name="ScanFileButton"
-                                Grid.Column="1"
-                                Content="Выбрать файл"
-                                Style="{StaticResource ActionButton}"
-                                Click="ScanFileButton_Click"
-                                Margin="0,0,8,0"/>
-
-                        <Button x:Name="CopyHashButton"
-                                Grid.Column="2"
-                                Content="Копировать SHA-256"
-                                Style="{StaticResource ActionButton}"
-                                Click="CopyHashButton_Click"
-                                IsEnabled="False"/>
-                    </Grid>
-
-                    <TextBlock Text="SHA-256"
-                               Foreground="#8B9BB4"
-                               FontSize="12"
-                               Margin="0,8,0,6"/>
-
-                    <Border Background="#0B1220"
-                            BorderBrush="#26354B"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12">
-                        <TextBlock x:Name="Sha256Text"
-                                   Text="Хеш пока не рассчитан"
-                                   Foreground="#B9C7DC"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"/>
-                    </Border>
-
-                    <TextBlock x:Name="ScanResultText"
-                               Text="Выбери файл для расчёта SHA-256."
-                               Foreground="#8B9BB4"
-                               FontSize="12"
-                               Margin="0,12,0,0"
-                               TextWrapping="Wrap"/>
-
-                </StackPanel>
-            </Border>
-        </Grid>
+        <Border Grid.Column="1"
+                Background="#102D3B"
+                CornerRadius="5"
+                Padding="9,5"
+                VerticalAlignment="Center">
+            <TextBlock Text="SHA-256"
+                       Foreground="#69D9FF"
+                       FontSize="10"
+                       FontWeight="Bold"/>
+        </Border>
     </Grid>
-</Border>
+
+    <Grid Grid.Row="1" Margin="0,0,0,10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Background="#0B1320"
+                BorderBrush="#26384B"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10,8"
+                Margin="0,0,8,0">
+            <TextBlock x:Name="ScanFilePathText"
+                       Text="Файл не выбран"
+                       Foreground="#A5B6CB"
+                       FontSize="11"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center"/>
+        </Border>
+
+        <Button x:Name="ScanFileButton"
+                Grid.Column="1"
+                Content="Выбрать файл"
+                Style="{StaticResource ActionButton}"
+                Click="ScanFileButton_Click"
+                Margin="0,0,8,0"/>
+
+        <Button x:Name="CopyHashButton"
+                Grid.Column="2"
+                Content="Копировать SHA-256"
+                Style="{StaticResource ActionButton}"
+                Click="CopyHashButton_Click"
+                IsEnabled="False"/>
+    </Grid>
+
+    <StackPanel Grid.Row="2">
+        <TextBlock Text="SHA-256"
+                   Foreground="#8B9BB4"
+                   FontSize="12"
+                   Margin="0,8,0,6"/>
+
+        <Border Background="#0B1220"
+                BorderBrush="#26354B"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <TextBlock x:Name="Sha256Text"
+                       Text="Хеш пока не рассчитан"
+                       Foreground="#B9C7DC"
+                       FontSize="12"
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <TextBlock x:Name="ScanResultText"
+                   Text="Выбери файл для расчёта SHA-256."
+                   Foreground="#8B9BB4"
+                   FontSize="12"
+                   Margin="0,12,0,0"
+                   TextWrapping="Wrap"/>
+    </StackPanel>
 </Grid>
-</Window>
