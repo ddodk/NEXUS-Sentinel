@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using NEXUS.Sentinel.Services;
 
 namespace NEXUS.Sentinel;
 
@@ -13,13 +14,30 @@ public sealed class ProcessDetailsWindow : Window
 {
     private readonly ProcessRow _row;
 
+    private readonly TextBlock _sha256Text = new()
+    {
+        Text = "Нажмите «Вычислить SHA-256»",
+        TextWrapping = TextWrapping.Wrap,
+        FontSize = 12
+    };
+
+    private readonly TextBlock _sha256Status = new()
+    {
+        Text = "Файл ещё не проверен",
+        TextWrapping = TextWrapping.Wrap,
+        FontSize = 11
+    };
+
+    private Button? _sha256Button;
+    private Button? _copyHashButton;
+
     public ProcessDetailsWindow(ProcessRow row)
     {
         _row = row;
 
         Title = $"NEXUS Sentinel — {_row.ProcessName}";
         Width = 720;
-        Height = 700;
+        Height = 760;
         MinWidth = 520;
         MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -56,8 +74,7 @@ public sealed class ProcessDetailsWindow : Window
 
         var scroll = new ScrollViewer
         {
-            VerticalScrollBarVisibility =
-                ScrollBarVisibility.Auto
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
 
         var content = new StackPanel();
@@ -87,14 +104,14 @@ public sealed class ProcessDetailsWindow : Window
         AddField(content, "Загрузка CPU", _row.CpuText);
         AddField(content, "Путь к файлу", _row.PathText);
 
-        AddSection(content, "Метаданные файла");
-
         string path = _row.PathText;
 
         bool fileAvailable =
             !string.IsNullOrWhiteSpace(path)
             && path != "Недоступен"
             && File.Exists(path);
+
+        AddSection(content, "Метаданные файла");
 
         if (fileAvailable)
         {
@@ -156,6 +173,110 @@ public sealed class ProcessDetailsWindow : Window
                 "Путь недоступен или файл уже не существует.");
         }
 
+        // SHA-256
+        var hashPanel = new StackPanel();
+
+        AddSection(hashPanel, "Целостность файла · SHA-256");
+
+        _sha256Text.Foreground = CreateBrush("#F2F5FF");
+        _sha256Text.Margin = new Thickness(0, 4, 0, 8);
+
+        _sha256Status.Foreground = CreateBrush("#96A3BB");
+        _sha256Status.Margin = new Thickness(0, 0, 0, 8);
+
+        hashPanel.Children.Add(_sha256Text);
+        hashPanel.Children.Add(_sha256Status);
+
+        _sha256Button = new Button
+        {
+            Content = "Вычислить SHA-256",
+            Padding = new Thickness(12, 8, 12, 8),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = CreateBrush("#776BFF"),
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+            IsEnabled = fileAvailable
+        };
+
+        _sha256Button.Click += async (_, _) =>
+        {
+            if (!fileAvailable || _sha256Button == null)
+                return;
+
+            _sha256Button.IsEnabled = false;
+            _sha256Text.Text = "Вычисление...";
+            _sha256Status.Text = "Чтение файла и расчёт хеша.";
+            
+            if (_copyHashButton != null)
+            {
+                hashPanel.Children.Remove(_copyHashButton);
+                _copyHashButton = null;
+            }
+
+            try
+            {
+                var result =
+                    await FileHashService.CalculateSha256Async(path);
+
+                if (!IsLoaded)
+                    return;
+
+                if (result.Success)
+                {
+                    _sha256Text.Text = result.Sha256;
+
+                    _sha256Status.Text =
+                        $"Успешно · {result.FileSizeBytes:N0} байт · " +
+                        result.CheckedAt.ToString("HH:mm:ss");
+
+                    _copyHashButton = new Button
+                    {
+                        Content = "Копировать SHA-256",
+                        Padding = new Thickness(12, 7, 12, 7),
+                        Margin = new Thickness(0, 8, 0, 0),
+                        HorizontalAlignment = HorizontalAlignment.Left
+                    };
+
+                    _copyHashButton.Click += (_, _) =>
+                    {
+                        try
+                        {
+                            Clipboard.SetText(result.Sha256);
+                            _sha256Status.Text =
+                                "Хеш скопирован в буфер обмена.";
+                        }
+                        catch (Exception ex)
+                        {
+                            _sha256Status.Text =
+                                $"Ошибка копирования: {ex.Message}";
+                        }
+                    };
+
+                    hashPanel.Children.Add(_copyHashButton);
+                }
+                else
+                {
+                    _sha256Text.Text = "Проверка не выполнена";
+                    _sha256Status.Text =
+                        result.Error ?? result.Status;
+                }
+            }
+            catch (Exception ex)
+            {
+                _sha256Text.Text = "Ошибка";
+                _sha256Status.Text = ex.Message;
+            }
+            finally
+            {
+                if (IsLoaded && _sha256Button != null)
+                    _sha256Button.IsEnabled = true;
+            }
+        };
+
+        hashPanel.Children.Add(_sha256Button);
+        content.Children.Add(hashPanel);
+
+        // Authenticode
         var signaturePanel = new StackPanel();
 
         AddSection(signaturePanel, "Проверка Authenticode");
@@ -174,10 +295,10 @@ public sealed class ProcessDetailsWindow : Window
             Text =
                 "Действительная подпись не гарантирует безопасность " +
                 "программы. Отсутствие подписи само по себе не " +
-                "означает, что файл вредоносный. Для проверки " +
-                "используется системный механизм Windows; проверка " +
-                "может зависеть от доступности сертификатов и " +
-                "инфраструктуры доверия.",
+                "означает, что файл вредоносный. SHA-256 позволяет " +
+                "сравнивать содержимое файлов, но не определяет " +
+                "безопасность файла. Проверка Authenticode использует " +
+                "системный механизм Windows.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = CreateBrush("#E9C878"),
             Background = CreateBrush("#202033"),
@@ -220,31 +341,30 @@ public sealed class ProcessDetailsWindow : Window
         panel.Children.Clear();
 
         AddSection(panel, "Проверка Authenticode");
-            
-string statusText = result.Status switch
-{
-    "Valid" =>
-        "Действительная подпись",
 
-    "NotSigned" =>
-        "Подпись отсутствует",
+        string statusText = result.Status switch
+        {
+            "Valid" =>
+                "Действительная подпись",
 
-    "HashMismatch" =>
-        "Хеш файла не соответствует подписи",
+            "NotSigned" =>
+                "Подпись отсутствует",
 
-    "NotTrusted" =>
-        "Подписант не считается доверенным",
+            "HashMismatch" =>
+                "Хеш файла не соответствует подписи",
 
-    "UnknownError" =>
-        "Не удалось определить статус подписи",
+            "NotTrusted" =>
+                "Подписант не считается доверенным",
 
-    "CheckFailed" =>
-        "Проверка не завершена",
+            "UnknownError" =>
+                "Не удалось определить статус подписи",
 
-    _ =>
-        $"Статус Windows: {result.Status}"
-};
+            "CheckFailed" =>
+                "Проверка не завершена",
 
+            _ =>
+                $"Статус Windows: {result.Status}"
+        };
 
         AddField(panel, "Результат", statusText);
 
