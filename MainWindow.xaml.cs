@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using NEXUS.Sentinel.Data;
@@ -39,7 +39,6 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         ProcessGrid.ItemsSource = new List<ProcessRow>();
-        ProcessGrid.MouseDoubleClick += ProcessGrid_MouseDoubleClick;
 
         _timer = new DispatcherTimer
         {
@@ -87,7 +86,7 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        FilterBox.Text = "";
+        FilterBox.Text = string.Empty;
         RefreshProcesses();
     }
 
@@ -101,6 +100,36 @@ public partial class MainWindow : Window
         };
 
         window.ShowDialog();
+    }
+
+    private void ProcessesNavButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ProcessGrid.ScrollIntoView(ProcessGrid.Items.Count > 0
+            ? ProcessGrid.Items[0]
+            : null);
+
+        ProcessGrid.Focus();
+    }
+
+    private void ScannerNavButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ScannerCard.BringIntoView();
+        ScanFileButton.Focus();
+    }
+
+    private void ProcessGrid_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (ProcessGrid.SelectedItem is ProcessRow row)
+        {
+            StatusTextUpdate(
+                $"Выбран процесс: {row.ProcessName} • PID {row.Id}");
+        }
     }
 
     private void ProcessGrid_MouseDoubleClick(
@@ -141,17 +170,22 @@ public partial class MainWindow : Window
 
         _isScanning = true;
         _lastSha256 = null;
+
         CopyHashButton.IsEnabled = false;
         ScanFileButton.IsEnabled = false;
+        ScannerStatusText.Text = "Сканирование";
+        ScannerStatusText.Foreground = Brushes.LightBlue;
+
         ScanFilePathText.Text = path;
         Sha256Text.Text = "Вычисление...";
-        ScanResultText.Text = "Чтение файла и вычисление SHA-256...";
-        ScanResultText.Foreground =
-            System.Windows.Media.Brushes.LightBlue;
+        ScanResultText.Text =
+            "Чтение файла и вычисление SHA-256...";
+        ScanResultText.Foreground = Brushes.LightBlue;
 
         try
         {
-            var result = await FileHashService.CalculateSha256Async(path);
+            var result =
+                await FileHashService.CalculateSha256Async(path);
 
             if (result.Success)
             {
@@ -159,14 +193,16 @@ public partial class MainWindow : Window
                 Sha256Text.Text = result.Sha256;
                 CopyHashButton.IsEnabled = true;
 
-                string sizeText = FormatFileSize(result.FileSizeBytes);
+                string sizeText =
+                    FormatFileSize(result.FileSizeBytes);
 
                 ScanResultText.Text =
                     $"Успешно • Размер: {sizeText} • " +
                     $"Время: {result.CheckedAt:HH:mm:ss}";
 
-                ScanResultText.Foreground =
-                    System.Windows.Media.Brushes.LightGreen;
+                ScanResultText.Foreground = Brushes.LightGreen;
+                ScannerStatusText.Text = "Завершён";
+                ScannerStatusText.Foreground = Brushes.LightGreen;
 
                 _eventStore.Add(
                     "FileHashCalculated",
@@ -178,16 +214,19 @@ public partial class MainWindow : Window
                 ScanResultText.Text =
                     result.Error ?? result.Status;
 
-                ScanResultText.Foreground =
-                    System.Windows.Media.Brushes.Orange;
+                ScanResultText.Foreground = Brushes.Orange;
+                ScannerStatusText.Text = "Ошибка";
+                ScannerStatusText.Foreground = Brushes.Orange;
             }
         }
         catch (Exception ex)
         {
             Sha256Text.Text = "Хеш не получен";
             ScanResultText.Text = $"Ошибка: {ex.Message}";
-            ScanResultText.Foreground =
-                System.Windows.Media.Brushes.Orange;
+            ScanResultText.Foreground = Brushes.Orange;
+
+            ScannerStatusText.Text = "Ошибка";
+            ScannerStatusText.Foreground = Brushes.Orange;
         }
         finally
         {
@@ -206,9 +245,10 @@ public partial class MainWindow : Window
         try
         {
             Clipboard.SetText(_lastSha256);
-            ScanResultText.Text = "SHA-256 скопирован в буфер обмена.";
-            ScanResultText.Foreground =
-                System.Windows.Media.Brushes.LightGreen;
+
+            ScanResultText.Text =
+                "SHA-256 скопирован в буфер обмена.";
+            ScanResultText.Foreground = Brushes.LightGreen;
         }
         catch (Exception ex)
         {
@@ -240,7 +280,9 @@ public partial class MainWindow : Window
 
             _lastSampleTimestamp = now;
 
-            var nextCpuSamples = new Dictionary<int, TimeSpan>();
+            var nextCpuSamples =
+                new Dictionary<int, TimeSpan>();
+
             var rows = new List<ProcessRow>();
             var currentProcesses = new Dictionary<int, string>();
 
@@ -279,7 +321,8 @@ public partial class MainWindow : Window
 
                         try
                         {
-                            string? filePath = process.MainModule?.FileName;
+                            string? filePath =
+                                process.MainModule?.FileName;
 
                             if (!string.IsNullOrWhiteSpace(filePath))
                                 path = filePath;
@@ -396,10 +439,13 @@ public partial class MainWindow : Window
 
             _processStatus.MarkAvailable(DataCompleteness.Partial);
 
-            StatusText.Text =
+            StatusTextUpdate(
                 $"Процессов: {rows.Count} • " +
                 $"Показано: {visibleRows.Count} • " +
-                $"Обновлено: {DateTime.Now:HH:mm:ss}";
+                $"Обновлено: {DateTime.Now:HH:mm:ss}");
+
+            ProcessCountText.Text = rows.Count.ToString();
+            LastUpdateText.Text = DateTime.Now.ToString("HH:mm:ss");
 
             _hasLoggedMonitorError = false;
         }
@@ -416,12 +462,19 @@ public partial class MainWindow : Window
                 _hasLoggedMonitorError = true;
             }
 
-            StatusText.Text = $"Ошибка мониторинга: {ex.Message}";
+            StatusTextUpdate($"Ошибка мониторинга: {ex.Message}");
+            LastUpdateText.Text = "Ошибка";
         }
         finally
         {
             _isRefreshing = false;
         }
+    }
+
+    private void StatusTextUpdate(string message)
+    {
+        // Строка статуса выводится в заголовке окна.
+        Title = $"NEXUS Sentinel — {message}";
     }
 
     private static string FormatFileSize(long bytes)
@@ -447,4 +500,4 @@ public sealed class ProcessRow
     public string CpuText { get; set; } = "";
     public string MemoryText { get; set; } = "";
     public string PathText { get; set; } = "";
-}
+} 
