@@ -1,4 +1,9 @@
+
+using System;
+using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using NEXUS.Sentinel.Models;
 
 namespace NEXUS.Sentinel.Services;
@@ -10,9 +15,7 @@ public static class FileHashService
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(filePath))
-        {
             return Failure(filePath, "Путь к файлу не указан.");
-        }
 
         try
         {
@@ -32,15 +35,12 @@ public static class FileHashService
             using var sha256 = SHA256.Create();
 
             byte[] hash = await sha256.ComputeHashAsync(
-                stream,
-                cancellationToken);
-
-            string hashText = Convert.ToHexString(hash);
+                stream, cancellationToken);
 
             return new FileScanResult
             {
                 FilePath = filePath,
-                Sha256 = hashText,
+                Sha256 = Convert.ToHexString(hash),
                 FileSizeBytes = fileSize,
                 CheckedAt = DateTime.Now,
                 Success = true,
@@ -53,27 +53,19 @@ public static class FileHashService
         }
         catch (UnauthorizedAccessException)
         {
-            return Failure(
-                filePath,
-                "Нет разрешения на чтение файла.");
+            return Failure(filePath, "Нет разрешения на чтение файла.");
         }
         catch (FileNotFoundException)
         {
-            return Failure(
-                filePath,
-                "Файл не найден или был удалён.");
+            return Failure(filePath, "Файл не найден или был удалён.");
         }
         catch (DirectoryNotFoundException)
         {
-            return Failure(
-                filePath,
-                "Каталог файла не найден.");
+            return Failure(filePath, "Каталог файла не найден.");
         }
         catch (IOException ex)
         {
-            return Failure(
-                filePath,
-                $"Ошибка чтения файла: {ex.Message}");
+            return Failure(filePath, $"Ошибка чтения файла: {ex.Message}");
         }
         catch (Exception ex)
         {
@@ -84,8 +76,7 @@ public static class FileHashService
     }
 
     private static FileScanResult Failure(
-        string? filePath,
-        string error)
+        string? filePath, string error)
     {
         return new FileScanResult
         {
