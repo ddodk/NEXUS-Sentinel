@@ -12,14 +12,10 @@
         FontFamily="Segoe UI">
 
     <Window.Resources>
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#0A0F18"/>
         <SolidColorBrush x:Key="SidebarBrush" Color="#0D1420"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#111B2A"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#233247"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#E8EEF8"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#8293AA"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#42C8F5"/>
-        <SolidColorBrush x:Key="GreenBrush" Color="#48D6A0"/>
 
         <Style x:Key="NavButton" TargetType="Button">
             <Setter Property="Foreground" Value="#9BAEC5"/>
@@ -46,8 +42,7 @@
                                 <Setter TargetName="NavBorder"
                                         Property="Background"
                                         Value="#19283A"/>
-                                <Setter Property="Foreground"
-                                        Value="#FFFFFF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="NavBorder"
@@ -85,9 +80,8 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="6"
                                 Padding="{TemplateBinding Padding}">
-                            <ContentPresenter
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"/>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -364,7 +358,7 @@
                 </Border>
             </UniformGrid>
 
-            <!-- Сканер -->
+            <!-- Сканер файлов -->
             <Border x:Name="ScannerCard"
                     Grid.Row="2"
                     Style="{StaticResource PanelCard}"
@@ -427,4 +421,57 @@
                                        VerticalAlignment="Center"/>
                         </Border>
 
-             
+                        <Button x:Name="ScanFileButton"
+                                Grid.Column="1"
+                                Content="Выбрать файл"
+                                Style="{StaticResource ActionButton}"
+                                Click="ScanFileButton_Click"
+                                Margin="0,0,8,0"/>
+
+                        <Button x:Name="ScanFileButton"
+        Content="Выбрать файл"
+        Style="{StaticResource ActionButton}"
+        Click="ScanFileButton_Click"
+        Margin="0,0,8,0"/>
+
+<Button x:Name="CopyHashButton"
+        Content="Копировать SHA-256"
+        Style="{StaticResource ActionButton}"
+        Click="CopyHashButton_Click"
+        IsEnabled="False"/>
+
+</StackPanel>
+</Grid>
+
+<TextBlock Text="SHA-256"
+           Foreground="#8B9BB4"
+           FontSize="12"
+           Margin="0,18,0,6"/>
+
+<Border Background="#0B1220"
+        BorderBrush="#26354B"
+        BorderThickness="1"
+        CornerRadius="8"
+        Padding="12">
+    <TextBlock x:Name="Sha256Text"
+               Text="Хеш пока не рассчитан"
+               Foreground="#B9C7DC"
+               FontSize="12"
+               TextWrapping="Wrap"/>
+</Border>
+
+<TextBlock x:Name="ScanResultText"
+           Text="Выбери файл для расчёта SHA-256."
+           Foreground="#8B9BB4"
+           FontSize="12"
+           Margin="0,12,0,0"
+           TextWrapping="Wrap"/>
+
+</StackPanel>
+</Border>
+
+</Grid>
+</Grid>
+</Border>
+</Grid>
+</Window>
