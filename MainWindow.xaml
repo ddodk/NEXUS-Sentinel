@@ -33,9 +33,8 @@
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="7"
                                 Padding="{TemplateBinding Padding}">
-                            <ContentPresenter
-                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                VerticalAlignment="Center"/>
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -146,12 +145,10 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Боковая панель -->
         <Border Grid.Column="0"
                 Background="{StaticResource SidebarBrush}"
                 BorderBrush="#1D2A3B"
                 BorderThickness="0,0,1,0">
-
             <DockPanel Margin="16">
                 <StackPanel DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal"
@@ -247,17 +244,14 @@
             </DockPanel>
         </Border>
 
-        <!-- Основная область -->
         <Grid Grid.Column="1" Margin="22,18,22,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Заголовок -->
             <Grid Grid.Row="0" Margin="0,0,0,18">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -295,11 +289,9 @@
                 </Border>
             </Grid>
 
-            <!-- Статистика -->
             <UniformGrid Grid.Row="1"
                          Columns="3"
                          Margin="0,0,0,16">
-
                 <Border Style="{StaticResource PanelCard}"
                         Margin="0,0,8,0">
                     <StackPanel>
@@ -358,108 +350,169 @@
                 </Border>
             </UniformGrid>
 
-            <!-- Сканер файлов -->
             <Border x:Name="ScannerCard"
                     Grid.Row="2"
                     Style="{StaticResource PanelCard}"
                     Margin="0,0,0,16">
-
                 <Grid>
-    <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-    <Grid Grid.Row="0" Margin="0,0,0,14">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-        <StackPanel>
-            <TextBlock Text="Сканер файлов"
-                       FontSize="16"
-                       FontWeight="SemiBold"
-                       Foreground="#F1F6FF"/>
+                        <StackPanel>
+                            <TextBlock Text="Сканер файлов"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F1F6FF"/>
+                            <TextBlock Text="Вычисление криптографического SHA-256"
+                                       FontSize="11"
+                                       Foreground="#8293AA"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
 
-            <TextBlock Text="Вычисление криптографического SHA-256"
-                       FontSize="11"
-                       Foreground="#8293AA"
-                       Margin="0,4,0,0"/>
-        </StackPanel>
+                        <Border Grid.Column="1"
+                                Background="#102D3B"
+                                CornerRadius="5"
+                                Padding="9,5"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="SHA-256"
+                                       Foreground="#69D9FF"
+                                       FontSize="10"
+                                       FontWeight="Bold"/>
+                        </Border>
+                    </Grid>
 
-        <Border Grid.Column="1"
-                Background="#102D3B"
-                CornerRadius="5"
-                Padding="9,5"
-                VerticalAlignment="Center">
-            <TextBlock Text="SHA-256"
-                       Foreground="#69D9FF"
-                       FontSize="10"
-                       FontWeight="Bold"/>
-        </Border>
+                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Background="#0B1320"
+                                BorderBrush="#26384B"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10,8"
+                                Margin="0,0,8,0">
+                            <TextBlock x:Name="ScanFilePathText"
+                                       Text="Файл не выбран"
+                                       Foreground="#A5B6CB"
+                                       FontSize="11"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+
+                        <Button x:Name="ScanFileButton"
+                                Grid.Column="1"
+                                Content="Выбрать файл"
+                                Style="{StaticResource ActionButton}"
+                                Click="ScanFileButton_Click"
+                                Margin="0,0,8,0"/>
+
+                        <Button x:Name="CopyHashButton"
+                                Grid.Column="2"
+                                Content="Копировать SHA-256"
+                                Style="{StaticResource ActionButton}"
+                                Click="CopyHashButton_Click"
+                                IsEnabled="False"/>
+                    </Grid>
+
+                    <StackPanel Grid.Row="2">
+                        <TextBlock Text="SHA-256"
+                                   Foreground="#8B9BB4"
+                                   FontSize="12"
+                                   Margin="0,8,0,6"/>
+
+                        <Border Background="#0B1220"
+                                BorderBrush="#26354B"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12">
+                            <TextBlock x:Name="Sha256Text"
+                                       Text="Хеш пока не рассчитан"
+                                       Foreground="#B9C7DC"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+
+                        <TextBlock x:Name="ScanResultText"
+                                   Text="Выбери файл для расчёта SHA-256."
+                                   Foreground="#8B9BB4"
+                                   FontSize="12"
+                                   Margin="0,12,0,0"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="3"
+                    Style="{StaticResource PanelCard}"
+                    Margin="0,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="FilterBox"
+                                 Grid.Column="0"
+                                 TextChanged="FilterBox_TextChanged"
+                                 Margin="0,0,8,0"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Фильтр по имени процесса, PID или пути"/>
+
+                        <Button Grid.Column="1"
+                                Content="Обновить"
+                                Style="{StaticResource ActionButton}"
+                                Click="RefreshButton_Click"
+                                Margin="0,0,8,0"/>
+
+                        <Button Grid.Column="2"
+                                Content="Сбросить"
+                                Style="{StaticResource ActionButton}"
+                                Click="ClearFilterButton_Click"/>
+                    </Grid>
+
+                    <DataGrid x:Name="ProcessGrid"
+                              Grid.Row="1"
+                              SelectionChanged="ProcessGrid_SelectionChanged"
+                              MouseDoubleClick="ProcessGrid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Процесс"
+                                                Binding="{Binding ProcessName}"
+                                                Width="*"/>
+                            <DataGridTextColumn Header="PID"
+                                                Binding="{Binding Id}"
+                                                Width="90"/>
+                            <DataGridTextColumn Header="CPU"
+                                                Binding="{Binding CpuText}"
+                                                Width="120"/>
+                            <DataGridTextColumn Header="Память"
+                                                Binding="{Binding MemoryText}"
+                                                Width="120"/>
+                            <DataGridTextColumn Header="Путь"
+                                                Binding="{Binding PathText}"
+                                                Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
-
-    <Grid Grid.Row="1" Margin="0,0,0,10">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
-
-        <Border Background="#0B1320"
-                BorderBrush="#26384B"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="10,8"
-                Margin="0,0,8,0">
-            <TextBlock x:Name="ScanFilePathText"
-                       Text="Файл не выбран"
-                       Foreground="#A5B6CB"
-                       FontSize="11"
-                       TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center"/>
-        </Border>
-
-        <Button x:Name="ScanFileButton"
-                Grid.Column="1"
-                Content="Выбрать файл"
-                Style="{StaticResource ActionButton}"
-                Click="ScanFileButton_Click"
-                Margin="0,0,8,0"/>
-
-        <Button x:Name="CopyHashButton"
-                Grid.Column="2"
-                Content="Копировать SHA-256"
-                Style="{StaticResource ActionButton}"
-                Click="CopyHashButton_Click"
-                IsEnabled="False"/>
-    </Grid>
-
-    <StackPanel Grid.Row="2">
-        <TextBlock Text="SHA-256"
-                   Foreground="#8B9BB4"
-                   FontSize="12"
-                   Margin="0,8,0,6"/>
-
-        <Border Background="#0B1220"
-                BorderBrush="#26354B"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="12">
-            <TextBlock x:Name="Sha256Text"
-                       Text="Хеш пока не рассчитан"
-                       Foreground="#B9C7DC"
-                       FontSize="12"
-                       TextWrapping="Wrap"/>
-        </Border>
-
-        <TextBlock x:Name="ScanResultText"
-                   Text="Выбери файл для расчёта SHA-256."
-                   Foreground="#8B9BB4"
-                   FontSize="12"
-                   Margin="0,12,0,0"
-                   TextWrapping="Wrap"/>
-    </StackPanel>
-</Grid>
+</Window>
