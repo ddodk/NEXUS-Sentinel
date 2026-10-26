@@ -1,0 +1,131 @@
+<Window x:Class="NEXUS.Sentinel.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="NEXUS Sentinel"
+        Width="1000"
+        Height="650"
+        MinWidth="760"
+        MinHeight="500"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundColor}"
+        Foreground="{StaticResource TextColor}">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,24">
+            <TextBlock Text="NEXUS SENTINEL"
+                       FontSize="28"
+                       FontWeight="Bold"/>
+            <TextBlock Text="Windows Security &amp; System Monitor"
+                       Foreground="{StaticResource MutedColor}"
+                       FontSize="13"
+                       Margin="0,5,0,0"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Background="{StaticResource PanelColor}"
+                CornerRadius="12"
+                Padding="18"
+                Margin="0,0,0,18">
+            <StackPanel>
+                <TextBlock Text="SYSTEM STATUS"
+                           FontSize="12"
+                           Foreground="{StaticResource MutedColor}"/>
+                <TextBlock Text="NEXUS Sentinel запущен"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Margin="0,8,0,5"/>
+                <TextBlock Text="Мониторинг и проверка системы пока не активированы."
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedColor}"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="2"
+                      VerticalScrollBarVisibility="Auto">
+            <UniformGrid Columns="2">
+
+                <Border Background="{StaticResource PanelColor}"
+                        CornerRadius="12"
+                        Padding="18"
+                        Margin="0,0,10,10">
+                    <StackPanel>
+                        <TextBlock Text="NEXUS Shield"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="Проверка состояния Microsoft Defender"
+                                   Foreground="{StaticResource MutedColor}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,14"/>
+                        <TextBlock Text="Модуль ещё не подключён"
+                                   Foreground="{StaticResource AccentColor}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource PanelColor}"
+                        CornerRadius="12"
+                        Padding="18"
+                        Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="Sentinel Watch"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="Процессы, память и нагрузка"
+                                   Foreground="{StaticResource MutedColor}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,14"/>
+                        <TextBlock Text="Модуль ещё не подключён"
+                                   Foreground="{StaticResource AccentColor}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource PanelColor}"
+                        CornerRadius="12"
+                        Padding="18"
+                        Margin="0,0,10,10">
+                    <StackPanel>
+                        <TextBlock Text="Threat Hunter"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="Анализ подозрительных событий"
+                                   Foreground="{StaticResource MutedColor}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,14"/>
+                        <TextBlock Text="Модуль ещё не подключён"
+                                   Foreground="{StaticResource AccentColor}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource PanelColor}"
+                        CornerRadius="12"
+                        Padding="18"
+                        Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="System Doctor"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="Диагностика и безопасная оптимизация"
+                                   Foreground="{StaticResource MutedColor}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,14"/>
+                        <TextBlock Text="Модуль ещё не подключён"
+                                   Foreground="{StaticResource AccentColor}"/>
+                    </StackPanel>
+                </Border>
+
+            </UniformGrid>
+        </ScrollViewer>
+
+        <TextBlock Grid.Row="3"
+                   Text="NEXUS Sentinel • Initial development build"
+                   Foreground="{StaticResource MutedColor}"
+                   FontSize="11"
+                   Margin="0,12,0,0"/>
+    </Grid>
+</Window>
