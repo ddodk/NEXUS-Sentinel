@@ -183,7 +183,7 @@
                             <TextBlock Text="SENTINEL"
                                        FontSize="10"
                                        FontWeight="SemiBold"
-                                       Foreground="#42C8F5"
+                                       Foreground="#42C8F5"/>
                         </StackPanel>
                     </StackPanel>
 
