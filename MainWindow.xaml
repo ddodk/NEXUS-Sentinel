@@ -428,49 +428,49 @@
                                 Click="ScanFileButton_Click"
                                 Margin="0,0,8,0"/>
 
-                        <Button x:Name="ScanFileButton"
-        Content="Выбрать файл"
-        Style="{StaticResource ActionButton}"
-        Click="ScanFileButton_Click"
-        Margin="0,0,8,0"/>
+                                            <Button x:Name="ScanFileButton"
+                            Content="Выбрать файл"
+                            Style="{StaticResource ActionButton}"
+                            Click="ScanFileButton_Click"
+                            Margin="0,0,8,0"/>
 
-<Button x:Name="CopyHashButton"
-        Content="Копировать SHA-256"
-        Style="{StaticResource ActionButton}"
-        Click="CopyHashButton_Click"
-        IsEnabled="False"/>
+                    <Button x:Name="CopyHashButton"
+                            Content="Копировать SHA-256"
+                            Style="{StaticResource ActionButton}"
+                            Click="CopyHashButton_Click"
+                            IsEnabled="False"/>
 
-</StackPanel>
-</Grid>
+                </StackPanel>
 
-<TextBlock Text="SHA-256"
-           Foreground="#8B9BB4"
-           FontSize="12"
-           Margin="0,18,0,6"/>
+                <TextBlock Text="SHA-256"
+                           Foreground="#8B9BB4"
+                           FontSize="12"
+                           Margin="0,18,0,6"/>
 
-<Border Background="#0B1220"
-        BorderBrush="#26354B"
-        BorderThickness="1"
-        CornerRadius="8"
-        Padding="12">
-    <TextBlock x:Name="Sha256Text"
-               Text="Хеш пока не рассчитан"
-               Foreground="#B9C7DC"
-               FontSize="12"
-               TextWrapping="Wrap"/>
-</Border>
+                <Border Background="#0B1220"
+                        BorderBrush="#26354B"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="12">
 
-<TextBlock x:Name="ScanResultText"
-           Text="Выбери файл для расчёта SHA-256."
-           Foreground="#8B9BB4"
-           FontSize="12"
-           Margin="0,12,0,0"
-           TextWrapping="Wrap"/>
+                    <TextBlock x:Name="Sha256Text"
+                               Text="Хеш пока не рассчитан"
+                               Foreground="#B9C7DC"
+                               FontSize="12"
+                               TextWrapping="Wrap"/>
 
-</StackPanel>
-</Border>
+                </Border>
 
-</Grid>
+                <TextBlock x:Name="ScanResultText"
+                           Text="Выбери файл для расчёта SHA-256."
+                           Foreground="#8B9BB4"
+                           FontSize="12"
+                           Margin="0,12,0,0"
+                           TextWrapping="Wrap"/>
+
+            </StackPanel>
+        </Border>
+    </Grid>
 </Grid>
 </Border>
 </Grid>
