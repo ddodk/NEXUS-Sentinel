@@ -16,9 +16,7 @@
 
     <Window.Resources>
 
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#11151D"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#1A202B"/>
-        <SolidColorBrush x:Key="PanelHoverBrush" Color="#222B39"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#2B3544"/>
         <SolidColorBrush x:Key="TextBrush" Color="#E5EAF2"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#A5B0C0"/>
@@ -35,6 +33,7 @@
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
@@ -93,6 +92,7 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="CaretBrush" Value="#8BB4ED"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type TextBox}">
@@ -112,6 +112,7 @@
                                         Property="BorderBrush"
                                         Value="#7299D4"/>
                             </Trigger>
+
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="InputBorder"
                                         Property="Opacity"
@@ -138,10 +139,12 @@
             <Setter Property="Foreground" Value="#DDE5F0"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
+
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#252F3E"/>
                 </Trigger>
+
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="#30445E"/>
                     <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -152,8 +155,6 @@
         <Style TargetType="{x:Type DataGridCell}">
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground"
-                    Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=DataGridRow}}"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         </Style>
 
@@ -168,7 +169,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
+        <!-- Заголовок -->
         <Grid Grid.Row="0" Margin="0,0,0,22">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -179,8 +180,7 @@
                 <TextBlock Text="NEXUS SENTINEL"
                            FontSize="28"
                            FontWeight="Bold"
-                           Foreground="#E5EAF2"
-                           CharacterSpacing="50"/>
+                           Foreground="#E5EAF2"/>
 
                 <TextBlock Text="Мониторинг и анализ процессов Windows"
                            FontSize="14"
@@ -195,12 +195,14 @@
                     CornerRadius="9"
                     Padding="12,8"
                     VerticalAlignment="Center">
+
                 <StackPanel Orientation="Horizontal">
                     <Ellipse Width="8"
                              Height="8"
                              Fill="#82B5A0"
                              VerticalAlignment="Center"
                              Margin="0,0,9,0"/>
+
                     <TextBlock Text="ЛОКАЛЬНЫЙ РЕЖИМ"
                                FontSize="11"
                                FontWeight="SemiBold"
@@ -210,7 +212,7 @@
             </Border>
         </Grid>
 
-        <!-- Monitoring status -->
+        <!-- Состояние мониторинга -->
         <Border Grid.Row="1"
                 Style="{StaticResource SectionCard}"
                 Padding="18"
@@ -227,6 +229,7 @@
                         CornerRadius="10"
                         Background="#27384D"
                         VerticalAlignment="Center">
+
                     <TextBlock Text="●"
                                Foreground="#8BB4ED"
                                FontSize="19"
@@ -234,8 +237,10 @@
                                VerticalAlignment="Center"/>
                 </Border>
 
-                <StackPanel Grid.Column="1" Margin="14,0,0,0"
+                <StackPanel Grid.Column="1"
+                            Margin="14,0,0,0"
                             VerticalAlignment="Center">
+
                     <TextBlock Text="СОСТОЯНИЕ МОНИТОРИНГА"
                                FontSize="11"
                                FontWeight="SemiBold"
@@ -251,7 +256,7 @@
             </Grid>
         </Border>
 
-        <!-- Search and actions -->
+        <!-- Поиск и действия -->
         <Grid Grid.Row="2" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -284,7 +289,7 @@
                     Style="{StaticResource ActionButton}"/>
         </Grid>
 
-        <!-- Process table -->
+        <!-- Таблица процессов -->
         <Border Grid.Row="3"
                 Background="#1A202B"
                 BorderBrush="#2B3544"
@@ -346,7 +351,7 @@
             </DataGrid>
         </Border>
 
-        <!-- Footer -->
+        <!-- Нижняя строка -->
         <Grid Grid.Row="4" Margin="2,13,2,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
