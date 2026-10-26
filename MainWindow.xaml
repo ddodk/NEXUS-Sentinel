@@ -1,300 +1,431 @@
-
 <Window x:Class="NEXUS.Sentinel.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="NEXUS Sentinel"
-        Width="1180" Height="800"
-        MinWidth="820" MinHeight="600"
+        Width="1360"
+        Height="850"
+        MinWidth="900"
+        MinHeight="650"
         WindowStartupLocation="CenterScreen"
-        Background="#11151D" Foreground="#E5EAF2"
-        FontFamily="Segoe UI"
-        UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        Background="#0A0F18"
+        Foreground="#E8EEF8"
+        FontFamily="Segoe UI">
 
     <Window.Resources>
-        <SolidColorBrush x:Key="PanelBrush" Color="#1A202B"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#2B3544"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#E5EAF2"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#A5B0C0"/>
-        <SolidColorBrush x:Key="AccentBrush" Color="#7299D4"/>
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#0A0F18"/>
+        <SolidColorBrush x:Key="SidebarBrush" Color="#0D1420"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#111B2A"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#233247"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#E8EEF8"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#8293AA"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#42C8F5"/>
+        <SolidColorBrush x:Key="GreenBrush" Color="#48D6A0"/>
 
-        <Style x:Key="ActionButton" TargetType="{x:Type Button}">
-            <Setter Property="Background" Value="#222B39"/>
-            <Setter Property="Foreground" Value="#E5EAF2"/>
-            <Setter Property="BorderBrush" Value="#303B4B"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="14,9"/>
-            <Setter Property="Margin" Value="6,0,0,0"/>
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#9BAEC5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="15,12"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,3,0,3"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="NavBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder"
+                                        Property="Background"
+                                        Value="#19283A"/>
+                                <Setter Property="Foreground"
+                                        Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="NavBorder"
+                                        Property="Background"
+                                        Value="#20364B"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style x:Key="SectionCard" TargetType="{x:Type Border}">
+        <Style x:Key="PanelCard" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="16"/>
         </Style>
 
-        <Style TargetType="{x:Type TextBox}">
-            <Setter Property="Background" Value="#151B25"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="BorderBrush" Value="#354153"/>
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Background" Value="#17364A"/>
+            <Setter Property="Foreground" Value="#7ADFFF"/>
+            <Setter Property="BorderBrush" Value="#28566D"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,7"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="CaretBrush" Value="#8BB4ED"/>
-        </Style>
-
-        <Style TargetType="{x:Type DataGridColumnHeader}">
-            <Setter Property="Background" Value="#202937"/>
-            <Setter Property="Foreground" Value="#C9D5E5"/>
-            <Setter Property="Padding" Value="12,12"/>
-            <Setter Property="BorderBrush" Value="#303B4B"/>
+            <Setter Property="Padding" Value="14,9"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#204961"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style TargetType="{x:Type DataGridRow}">
-            <Setter Property="Background" Value="#1A202B"/>
-            <Setter Property="Foreground" Value="#DDE5F0"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#252F3E"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#30445E"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0B1320"/>
+            <Setter Property="Foreground" Value="#E8EEF8"/>
+            <Setter Property="CaretBrush" Value="#42C8F5"/>
+            <Setter Property="BorderBrush" Value="#2A3B50"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#101927"/>
+            <Setter Property="Foreground" Value="#DCE7F5"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="RowBackground" Value="#101927"/>
+            <Setter Property="AlternatingRowBackground" Value="#131F30"/>
+            <Setter Property="GridLinesVisibility" Value="None"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="RowHeight" Value="35"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#152236"/>
+            <Setter Property="Foreground" Value="#8FA5BF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,10"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- Заголовок -->
-        <Grid Grid.Row="0" Margin="0,0,0,16">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+        <!-- Боковая панель -->
+        <Border Grid.Column="0"
+                Background="{StaticResource SidebarBrush}"
+                BorderBrush="#1D2A3B"
+                BorderThickness="0,0,1,0">
 
-            <StackPanel>
-                <TextBlock Text="NEXUS SENTINEL"
-                           FontSize="27"
-                           FontWeight="Bold"/>
-                <TextBlock Text="Мониторинг и анализ процессов Windows"
-                           FontSize="13"
-                           Foreground="#A5B0C0"
-                           Margin="0,5,0,0"/>
-            </StackPanel>
+            <DockPanel Margin="16">
+                <StackPanel DockPanel.Dock="Top">
+                    <StackPanel Orientation="Horizontal"
+                                Margin="2,5,0,25">
+                        <Border Width="35"
+                                Height="35"
+                                Background="#14364A"
+                                CornerRadius="9">
+                            <TextBlock Text="N"
+                                       Foreground="#42C8F5"
+                                       FontSize="23"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
 
-            <Border Grid.Column="1"
-                    Background="#202B39"
-                    BorderBrush="#35465A"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="12,8"
-                    VerticalAlignment="Center">
-                <TextBlock Text="ЛОКАЛЬНЫЙ РЕЖИМ"
-                           FontSize="11"
-                           FontWeight="SemiBold"
-                           Foreground="#C5D5E7"/>
-            </Border>
-        </Grid>
+                        <StackPanel Margin="10,0,0,0"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="NEXUS"
+                                       FontSize="17"
+                                       FontWeight="Bold"
+                                       Foreground="#F1F6FF"/>
+                            <TextBlock Text="SENTINEL"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="#42C8F5"
+                                       CharacterSpacing="180"/>
+                        </StackPanel>
+                    </StackPanel>
 
-        <!-- Состояние мониторинга -->
-        <Border Grid.Row="1"
-                Style="{StaticResource SectionCard}"
-                Padding="15"
-                Margin="0,0,0,14">
-            <StackPanel>
-                <TextBlock Text="СОСТОЯНИЕ МОНИТОРИНГА"
-                           FontSize="11"
-                           FontWeight="SemiBold"
-                           Foreground="#A5B0C0"/>
-                <TextBlock x:Name="StatusText"
-                           Text="Подготовка мониторинга..."
-                           FontSize="14"
-                           Margin="0,5,0,0"
-                           TextWrapping="Wrap"/>
-            </StackPanel>
+                    <TextBlock Text="WORKSPACE"
+                               Foreground="#586D86"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Margin="8,0,0,8"/>
+
+                    <Button Style="{StaticResource NavButton}"
+                            Background="#19283A"
+                            Foreground="#65D8FF"
+                            Content="▦   Обзор"/>
+
+                    <Button Style="{StaticResource NavButton}"
+                            Content="◉   Процессы"
+                            Click="ProcessesNavButton_Click"/>
+
+                    <Button Style="{StaticResource NavButton}"
+                            Content="⌕   Сканер файлов"
+                            Click="ScannerNavButton_Click"/>
+
+                    <Button Style="{StaticResource NavButton}"
+                            Content="☷   Журнал событий"
+                            Click="OpenEventLogButton_Click"/>
+
+                    <TextBlock Text="СИСТЕМА"
+                               Foreground="#586D86"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Margin="8,25,0,8"/>
+
+                    <Button Style="{StaticResource NavButton}"
+                            Content="⟳   Обновить данные"
+                            Click="RefreshButton_Click"/>
+
+                    <Button Style="{StaticResource NavButton}"
+                            Content="×   Сбросить фильтр"
+                            Click="ClearFilterButton_Click"/>
+                </StackPanel>
+
+                <Border DockPanel.Dock="Bottom"
+                        Background="#111E2D"
+                        BorderBrush="#26384B"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="12"
+                        Margin="0,20,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="7"
+                                     Height="7"
+                                     Fill="#48D6A0"
+                                     VerticalAlignment="Center"/>
+                            <TextBlock Text="  ЛОКАЛЬНЫЙ РЕЖИМ"
+                                       Foreground="#48D6A0"
+                                       FontSize="10"
+                                       FontWeight="Bold"/>
+                        </StackPanel>
+                        <TextBlock Text="Данные обрабатываются на этом компьютере."
+                                   Foreground="#8293AA"
+                                   FontSize="10"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
+            </DockPanel>
         </Border>
 
-        <!-- Поиск и действия -->
-        <Grid Grid.Row="2" Margin="0,0,0,14">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+        <!-- Основная область -->
+        <Grid Grid.Column="1" Margin="22,18,22,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <TextBox x:Name="FilterBox"
-                     Grid.Column="0"
-                     Height="40"
-                     VerticalContentAlignment="Center"
-                     ToolTip="Поиск по имени процесса, PID или пути"
-                     TextChanged="FilterBox_TextChanged"/>
+            <!-- Заголовок -->
+            <Grid Grid.Row="0" Margin="0,0,0,18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <Button Grid.Column="1"
-                    Content="Обновить"
-                    Click="RefreshButton_Click"
-                    Style="{StaticResource ActionButton}"
-                    Background="#304A6B"/>
+                <StackPanel>
+                    <TextBlock Text="Центр безопасности"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="#F1F6FF"/>
+                    <TextBlock Text="Мониторинг процессов и анализ файлов"
+                               FontSize="12"
+                               Foreground="{StaticResource MutedBrush}"
+                               Margin="0,5,0,0"/>
+                </StackPanel>
 
-            <Button Grid.Column="2"
-                    Content="Сбросить"
-                    Click="ClearFilterButton_Click"
-                    Style="{StaticResource ActionButton}"/>
+                <Border Grid.Column="1"
+                        Background="#112A27"
+                        BorderBrush="#245348"
+                        BorderThickness="1"
+                        CornerRadius="7"
+                        Padding="12,8"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7"
+                                 Height="7"
+                                 Fill="#48D6A0"
+                                 VerticalAlignment="Center"/>
+                        <TextBlock Text="  МОНИТОРИНГ"
+                                   Foreground="#7CE3BA"
+                                   FontSize="10"
+                                   FontWeight="Bold"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
-            <Button Grid.Column="3"
-                    Content="Журнал"
-                    Click="OpenEventLogButton_Click"
-                    Style="{StaticResource ActionButton}"/>
-        </Grid>
+            <!-- Статистика -->
+            <UniformGrid Grid.Row="1"
+                         Columns="3"
+                         Margin="0,0,0,16">
 
-        <!-- Сканирование файлов -->
-        <Border Grid.Row="3"
-                Style="{StaticResource SectionCard}"
-                Padding="15"
-                Margin="0,0,0,14">
+                <Border Style="{StaticResource PanelCard}"
+                        Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="ПРОЦЕССЫ"
+                                   Foreground="#8293AA"
+                                   FontSize="10"
+                                   FontWeight="Bold"/>
+                        <TextBlock x:Name="ProcessCountText"
+                                   Text="—"
+                                   Foreground="#F1F6FF"
+                                   FontSize="27"
+                                   FontWeight="SemiBold"
+                                   Margin="0,8,0,2"/>
+                        <TextBlock Text="Обнаружено процессов"
+                                   Foreground="#8293AA"
+                                   FontSize="10"/>
+                    </StackPanel>
+                </Border>
 
-            <StackPanel>
-                <TextBlock Text="СКАНИРОВАНИЕ ФАЙЛОВ"
-                           FontSize="14"
-                           FontWeight="Bold"
-                           Foreground="#A9B9FF"/>
+                <Border Style="{StaticResource PanelCard}"
+                        Margin="4,0">
+                    <StackPanel>
+                        <TextBlock Text="ОБНОВЛЕНИЕ"
+                                   Foreground="#8293AA"
+                                   FontSize="10"
+                                   FontWeight="Bold"/>
+                        <TextBlock x:Name="LastUpdateText"
+                                   Text="Ожидание"
+                                   Foreground="#42C8F5"
+                                   FontSize="21"
+                                   FontWeight="SemiBold"
+                                   Margin="0,11,0,5"/>
+                        <TextBlock Text="Интервал мониторинга: 3 сек."
+                                   Foreground="#8293AA"
+                                   FontSize="10"/>
+                    </StackPanel>
+                </Border>
 
-                <TextBlock Text="Вычисление SHA-256 локально на компьютере"
-                           FontSize="12"
-                           Foreground="#A5B0C0"
-                           Margin="0,4,0,12"/>
+                <Border Style="{StaticResource PanelCard}"
+                        Margin="8,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="СКАНЕР ФАЙЛОВ"
+                                   Foreground="#8293AA"
+                                   FontSize="10"
+                                   FontWeight="Bold"/>
+                        <TextBlock x:Name="ScannerStatusText"
+                                   Text="Готов"
+                                   Foreground="#48D6A0"
+                                   FontSize="21"
+                                   FontWeight="SemiBold"
+                                   Margin="0,11,0,5"/>
+                        <TextBlock Text="Алгоритм SHA-256"
+                                   Foreground="#8293AA"
+                                   FontSize="10"/>
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
 
-                <WrapPanel>
-                    <Button x:Name="ScanFileButton"
-                            Content="Выбрать файл и вычислить SHA-256"
-                            Click="ScanFileButton_Click"
-                            Style="{StaticResource ActionButton}"
-                            Margin="0,0,8,8"
-                            Background="#304A6B"/>
+            <!-- Сканер -->
+            <Border x:Name="ScannerCard"
+                    Grid.Row="2"
+                    Style="{StaticResource PanelCard}"
+                    Margin="0,0,0,16">
 
-                    <Button x:Name="CopyHashButton"
-                            Content="Копировать хеш"
-                            Click="CopyHashButton_Click"
-                            Style="{StaticResource ActionButton}"
-                            Margin="0,0,0,8"
-                            IsEnabled="False"/>
-                </WrapPanel>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                <TextBlock Text="Файл"
-                           FontSize="11"
-                           Foreground="#A5B0C0"
-                           Margin="0,4,0,4"/>
+                    <Grid Grid.Row="0" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                <TextBox x:Name="ScanFilePathText"
-                         IsReadOnly="True"
-                         Text="Файл не выбран"
-                         TextWrapping="Wrap"
-                         Margin="0,0,0,8"/>
+                        <StackPanel>
+                            <TextBlock Text="Сканер файлов"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F1F6FF"/>
+                            <TextBlock Text="Вычисление криптографического SHA-256"
+                                       FontSize="11"
+                                       Foreground="#8293AA"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
 
-                <TextBlock Text="SHA-256"
-                           FontSize="11"
-                           Foreground="#A5B0C0"
-                           Margin="0,0,0,4"/>
+                        <Border Grid.Column="1"
+                                Background="#102D3B"
+                                CornerRadius="5"
+                                Padding="9,5"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="SHA-256"
+                                       Foreground="#69D9FF"
+                                       FontSize="10"
+                                       FontWeight="Bold"/>
+                        </Border>
+                    </Grid>
 
-                <TextBox x:Name="Sha256Text"
-                         IsReadOnly="True"
-                         Text="Хеш ещё не вычислен"
-                         TextWrapping="Wrap"
-                         FontFamily="Consolas"
-                         FontSize="12"
-                         Margin="0,0,0,8"/>
+                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                <TextBlock x:Name="ScanResultText"
-                           Text="Ожидание выбора файла."
-                           Foreground="#A5B0C0"
-                           TextWrapping="Wrap"/>
+                        <Border Background="#0B1320"
+                                BorderBrush="#26384B"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10,8"
+                                Margin="0,0,8,0">
+                            <TextBlock x:Name="ScanFilePathText"
+                                       Text="Файл не выбран"
+                                       Foreground="#A5B6CB"
+                                       FontSize="11"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </Border>
 
-            </StackPanel>
-        </Border>
-
-        <!-- Таблица процессов -->
-        <Border Grid.Row="4"
-                Background="#1A202B"
-                BorderBrush="#2B3544"
-                BorderThickness="1"
-                CornerRadius="12"
-                ClipToBounds="True">
-
-            <DataGrid x:Name="ProcessGrid"
-                      AutoGenerateColumns="False"
-                      IsReadOnly="True"
-                      CanUserAddRows="False"
-                      CanUserDeleteRows="False"
-                      CanUserSortColumns="True"
-                      SelectionMode="Single"
-                      SelectionUnit="FullRow"
-                      HeadersVisibility="Column"
-                      GridLinesVisibility="Horizontal"
-                      HorizontalGridLinesBrush="#2B3544"
-                      Background="#1A202B"
-                      Foreground="#DDE5F0"
-                      BorderThickness="0"
-                      AlternatingRowBackground="#1D2531"
-                      FontSize="12"
-                      RowHeight="38"
-                      ColumnHeaderHeight="40"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Auto">
-
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Процесс"
-                                        Binding="{Binding ProcessName}"
-                                        Width="170"/>
-                    <DataGridTextColumn Header="PID"
-                                        Binding="{Binding Id}"
-                                        Width="70"/>
-                    <DataGridTextColumn Header="CPU"
-                                        Binding="{Binding CpuText}"
-                                        Width="85"/>
-                    <DataGridTextColumn Header="Память"
-                                        Binding="{Binding MemoryText}"
-                                        Width="100"/>
-                    <DataGridTextColumn Header="Путь к файлу"
-                                        Binding="{Binding PathText}"
-                                        Width="*"
-                                        MinWidth="180"/>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Border>
-
-        <!-- Нижняя строка -->
-        <Grid Grid.Row="5" Margin="2,10,2,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <TextBlock Text="NEXUS Sentinel • Локальный сбор данных"
-                       FontSize="11"
-                       Foreground="#8996A8"
-                       VerticalAlignment="Center"
-                       TextWrapping="Wrap"/>
-
-            <TextBlock Grid.Column="1"
-                       Text="Windows • .NET 8"
-                       FontSize="11"
-                       Foreground="#8996A8"
-                       VerticalAlignment="Center"
-                       Margin="10,0,0,0"/>
-        </Grid>
-    </Grid>
-</Window>
+             
