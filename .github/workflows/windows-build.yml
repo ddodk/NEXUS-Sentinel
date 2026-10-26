@@ -1,0 +1,41 @@
+
+name: NEXUS Sentinel Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore NEXUS.Sentinel.csproj
+
+      - name: Build
+        run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
+
+      - name: Publish Windows x64 application
+        run: dotnet publish NEXUS.Sentinel.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXUS-Sentinel-Windows-x64
+          path: bin/Release/net8.0-windows/win-x64/publish/
+          if-no-files-found: error
