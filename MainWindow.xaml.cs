@@ -1,31 +1,25 @@
-
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows;
-using System.Windows.Data;
+using System.Windows.Controls;
 using System.Windows.Threading;
 
 namespace NEXUS.Sentinel;
 
 public partial class MainWindow : Window
 {
-    private readonly ObservableCollection<ProcessRow> _processes = new();
-    private readonly Dictionary<int, TimeSpan> _previousCpu = new();
-    private readonly ICollectionView _processView;
     private readonly DispatcherTimer _timer;
-
+    private readonly Dictionary<int, TimeSpan> _previousCpu = new();
     private long _lastSampleTimestamp;
+    private bool _isRefreshing;
 
     public MainWindow()
     {
         InitializeComponent();
 
-        _processView = CollectionViewSource.GetDefaultView(_processes);
-        _processView.Filter = MatchesFilter;
-        ProcessGrid.ItemsSource = _processView;
+        ProcessGrid.ItemsSource = new List<ProcessRow>();
 
         _timer = new DispatcherTimer
         {
@@ -43,28 +37,12 @@ public partial class MainWindow : Window
         Closed += (_, _) => _timer.Stop();
     }
 
-    private bool MatchesFilter(object item)
-    {
-        if (item is not ProcessRow process)
-            return false;
-
-        string query = FilterBox?.Text?.Trim() ?? "";
-
-        if (query.Length == 0)
-            return true;
-
-        return process.ProcessName.Contains(
-                   query, StringComparison.OrdinalIgnoreCase)
-               || process.Id.ToString().Contains(query)
-               || process.PathText.Contains(
-                   query, StringComparison.OrdinalIgnoreCase);
-    }
-
     private void FilterBox_TextChanged(
         object sender,
-        System.Windows.Controls.TextChangedEventArgs e)
+        TextChangedEventArgs e)
     {
-        _processView?.Refresh();
+        if (!_isRefreshing)
+            RefreshProcesses();
     }
 
     private void RefreshButton_Click(
@@ -79,11 +57,16 @@ public partial class MainWindow : Window
         RoutedEventArgs e)
     {
         FilterBox.Text = "";
-        _processView.Refresh();
+        RefreshProcesses();
     }
 
     private void RefreshProcesses()
     {
+        if (_isRefreshing)
+            return;
+
+        _isRefreshing = true;
+
         try
         {
             long now = Stopwatch.GetTimestamp();
@@ -117,7 +100,6 @@ public partial class MainWindow : Window
                         }
                         catch
                         {
-                            // Процесс мог завершиться или закрыть доступ.
                         }
 
                         try
@@ -127,7 +109,6 @@ public partial class MainWindow : Window
                         }
                         catch
                         {
-                            // CPU может быть недоступен.
                         }
 
                         try
@@ -139,7 +120,6 @@ public partial class MainWindow : Window
                         }
                         catch
                         {
-                            // Windows может ограничивать доступ к пути.
                         }
 
                         string cpuText = "Сбор данных";
@@ -181,8 +161,6 @@ public partial class MainWindow : Window
                     }
                     catch
                     {
-                        // Пропускаем процесс, который завершился
-                        // во время чтения данных.
                     }
                 }
             }
@@ -192,23 +170,33 @@ public partial class MainWindow : Window
             foreach (var sample in nextCpuSamples)
                 _previousCpu[sample.Key] = sample.Value;
 
-            var orderedRows = rows
+            string query = FilterBox.Text.Trim();
+
+            var visibleRows = rows
+                .Where(row =>
+                    query.Length == 0
+                    || row.ProcessName.Contains(
+                        query, StringComparison.OrdinalIgnoreCase)
+                    || row.Id.ToString().Contains(query)
+                    || row.PathText.Contains(
+                        query, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(row => row.ProcessName)
                 .ToList();
 
-            _processes.Clear();
-
-            foreach (ProcessRow row in orderedRows)
-                _processes.Add(row);
-
-            _processView.Refresh();
+            ProcessGrid.ItemsSource = visibleRows;
 
             StatusText.Text =
-                $"Процессов: {rows.Count}  •  Обновлено: {DateTime.Now:HH:mm:ss}";
+                $"Процессов: {rows.Count}  •  " +
+                $"Показано: {visibleRows.Count}  •  " +
+                $"Обновлено: {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Ошибка мониторинга: {ex.Message}";
+        }
+        finally
+        {
+            _isRefreshing = false;
         }
     }
 }
