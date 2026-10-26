@@ -184,7 +184,6 @@
                                        FontSize="10"
                                        FontWeight="SemiBold"
                                        Foreground="#42C8F5"
-                                       CharacterSpacing="180"/>
                         </StackPanel>
                     </StackPanel>
 
