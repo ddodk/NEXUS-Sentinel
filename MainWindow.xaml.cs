@@ -9,8 +9,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 using Microsoft.Win32;
+using System.Windows.Threading;
 using NEXUS.Sentinel.Data;
 using NEXUS.Sentinel.Diagnostics;
 using NexusSentinel.Engine;
@@ -159,137 +159,134 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        if (_isScanning)
-            return;
+                if (_isScanning)
+                    return;
 
-        var dialog = new OpenFileDialog
-        {
-            Title = "Выберите файл для вычисления SHA-256",
-            CheckFileExists = true,
-            CheckPathExists = true,
-            Multiselect = false,
-            Filter = "Все файлы (*.*)|*.*"
-        };
-
-        if (dialog.ShowDialog(this) != true)
-            return;
-
-        string path = dialog.FileName;
-
-        _isScanning = true;
-        _lastSha256 = null;
-
-        CopyHashButton.IsEnabled = false;
-        ScanFileButton.IsEnabled = false;
-        ScannerStatusText.Text = "Сканирование";
-        ScannerStatusText.Foreground = Brushes.LightBlue;
-
-        ScanFilePathText.Text = path;
-        Sha256Text.Text = "Вычисление...";
-        ScanResultText.Text =
-            "Чтение файла и вычисление SHA-256...";
-        ScanResultText.Foreground = Brushes.LightBlue;
-
-        try
-        {
-            var result = await _scanOrchestrator.ScanAsync(
-                path,
-                _shutdownCancellation.Token);
-
-            if (!IsLoaded)
-                return;
-
-            if (!string.IsNullOrEmpty(result.File.Hash.Sha256))
-            {
-                _lastSha256 = result.File.Hash.Sha256;
-                Sha256Text.Text = result.File.Hash.Sha256;
-                CopyHashButton.IsEnabled = true;
-            }
-            else
-            {
-                Sha256Text.Text = "Хеш не получен";
-            }
-
-            if (result.Outcome == ScanOutcome.Error)
-            {
-                ScanResultText.Text = $"Ошибка: {result.Error}";
-                ScanResultText.Foreground = Brushes.Orange;
-                ScannerStatusText.Text = "Ошибка";
-                ScannerStatusText.Foreground = Brushes.Orange;
-            }
-            else
-            {
-                string peStatus = result.Pe?.FormatStatus switch
+                var dialog = new OpenFileDialog
                 {
-                    PeFormatStatus.PeValid => "PE: структура разобрана",
-                    PeFormatStatus.PeCorrupted => "PE: повреждён",
-                    _ => "PE: не обнаружен"
+                    Title = "Выберите файл для вычисления SHA-256",
+                    CheckFileExists = true,
+                    CheckPathExists = true,
+                    Multiselect = false,
+                    Filter = "Все файлы (*.*)|*.*"
                 };
-                                string fileDetails = result.File.Hash.Sha256.Length == 0
-                                        ? string.Empty
-                                        : $" • Размер: {FormatFileSize(result.File.Hash.SizeBytes)}" +
-                                            $" • Время: {DateTime.Now:HH:mm:ss}";
 
-                                ScanResultText.Text = result.Heuristics.Count == 0
-                                        ? $"{result.Verdict} • Риск: {result.RiskScore}/100" +
-                                            $"{fileDetails} • " +
-                                            $"{peStatus}. Поддерживаемые индикаторы не " +
-                                            "обнаружены; безопасность файла не подтверждена."
-                                        : $"{result.Verdict} • Риск: {result.RiskScore}/100" +
-                                            $"{fileDetails} • " +
-                                            $"{peStatus}. Проверка не заменяет антивирусный анализ.";
+                if (dialog.ShowDialog(this) != true)
+                    return;
 
-                ScannerStatusText.Text = "Завершён";
-                ScannerStatusText.Foreground = result.Verdict switch
+                string path = dialog.FileName;
+
+                _isScanning = true;
+                _lastSha256 = null;
+
+                CopyHashButton.IsEnabled = false;
+                ScanFileButton.IsEnabled = false;
+                ScannerStatusText.Text = "Сканирование";
+                ScannerStatusText.Foreground = Brushes.LightBlue;
+
+                ScanFilePathText.Text = path;
+                Sha256Text.Text = "Вычисление...";
+                ScanResultText.Text = "Чтение файла и вычисление SHA-256...";
+                ScanResultText.Foreground = Brushes.LightBlue;
+
+                try
                 {
-                    Verdict.Malicious => Brushes.OrangeRed,
-                    Verdict.Suspicious => Brushes.Orange,
-                    _ => Brushes.LightGreen
-                };
-                ScanResultText.Foreground = ScannerStatusText.Foreground;
+                    ScanResult result = await _scanOrchestrator.ScanAsync(
+                        path,
+                        _shutdownCancellation.Token);
 
-                _eventStore.Add(
-                    "FileScanCompleted",
-                    $"Сканирование завершено: " +
-                    $"{result.Outcome}, риск {result.RiskScore}.");
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            if (!IsLoaded)
-                return;
+                    if (!IsLoaded)
+                        return;
 
-            Sha256Text.Text = "Сканирование отменено";
-            ScanResultText.Text = "Сканирование отменено.";
-            ScanResultText.Foreground = Brushes.Orange;
-            ScannerStatusText.Text = "Отменено";
-            ScannerStatusText.Foreground = Brushes.Orange;
-        }
-        catch (OutOfMemoryException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            if (!IsLoaded)
-                return;
+                    if (!string.IsNullOrEmpty(result.File.Hash.Sha256))
+                    {
+                        _lastSha256 = result.File.Hash.Sha256;
+                        Sha256Text.Text = result.File.Hash.Sha256;
+                        CopyHashButton.IsEnabled = true;
+                    }
+                    else
+                    {
+                        Sha256Text.Text = "Хеш не получен";
+                    }
 
-            Sha256Text.Text = "Хеш не получен";
-            ScanResultText.Text = $"Ошибка: {ex.Message}";
-            ScanResultText.Foreground = Brushes.Orange;
+                    if (result.Outcome == ScanOutcome.Error)
+                    {
+                        ScanResultText.Text = $"Ошибка: {result.Error}";
+                        ScanResultText.Foreground = Brushes.Orange;
+                        ScannerStatusText.Text = "Ошибка";
+                        ScannerStatusText.Foreground = Brushes.Orange;
+                    }
+                    else
+                    {
+                        string peStatus = result.Pe?.FormatStatus switch
+                        {
+                            PeFormatStatus.PeValid => "PE: структура разобрана",
+                            PeFormatStatus.PeCorrupted => "PE: повреждён",
+                            _ => "PE: не обнаружен"
+                        };
+                        string fileDetails = result.File.Hash.Sha256.Length == 0
+                            ? string.Empty
+                            : $" • Размер: {FormatFileSize(result.File.Hash.SizeBytes)}" +
+                              $" • Время: {DateTime.Now:HH:mm:ss}";
 
-            ScannerStatusText.Text = "Ошибка";
-            ScannerStatusText.Foreground = Brushes.Orange;
-            _eventStore.Add(
-                "FileScanUiError",
-                "Не удалось отобразить результат сканирования.");
-        }
-        finally
-        {
-            _isScanning = false;
-            if (IsLoaded)
-                ScanFileButton.IsEnabled = true;
-        }
+                        ScanResultText.Text = result.Heuristics.Count == 0
+                            ? $"{result.Verdict} • Риск: {result.RiskScore}/100" +
+                              $"{fileDetails} • {peStatus}. Поддерживаемые индикаторы " +
+                              "не обнаружены; безопасность файла не подтверждена."
+                            : $"{result.Verdict} • Риск: {result.RiskScore}/100" +
+                              $"{fileDetails} • {peStatus}. Проверка не заменяет " +
+                              "антивирусный анализ.";
+
+                        ScannerStatusText.Text = "Завершён";
+                        ScannerStatusText.Foreground = result.Verdict switch
+                        {
+                            Verdict.Malicious => Brushes.OrangeRed,
+                            Verdict.Suspicious => Brushes.Orange,
+                            _ => Brushes.LightGreen
+                        };
+                        ScanResultText.Foreground = ScannerStatusText.Foreground;
+
+                        _eventStore.Add(
+                            "FileScanCompleted",
+                            $"Сканирование завершено: {result.Outcome}, " +
+                            $"риск {result.RiskScore}.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    if (!IsLoaded)
+                        return;
+
+                    Sha256Text.Text = "Сканирование отменено";
+                    ScanResultText.Text = "Сканирование отменено.";
+                    ScanResultText.Foreground = Brushes.Orange;
+                    ScannerStatusText.Text = "Отменено";
+                    ScannerStatusText.Foreground = Brushes.Orange;
+                }
+                catch (OutOfMemoryException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (!IsLoaded)
+                        return;
+
+                    Sha256Text.Text = "Хеш не получен";
+                    ScanResultText.Text = $"Ошибка: {ex.Message}";
+                    ScanResultText.Foreground = Brushes.Orange;
+                    ScannerStatusText.Text = "Ошибка";
+                    ScannerStatusText.Foreground = Brushes.Orange;
+                    _eventStore.Add(
+                        "FileScanUiError",
+                        "Не удалось отобразить результат сканирования.");
+                }
+                finally
+                {
+                    _isScanning = false;
+                    if (IsLoaded)
+                        ScanFileButton.IsEnabled = true;
+                }
     }
 
     private void CopyHashButton_Click(
@@ -547,10 +544,6 @@ public partial class MainWindow : Window
                         PathText = path
                     });
                 }
-                catch (OutOfMemoryException)
-                {
-                    throw;
-                }
                 catch
                 {
                     // Процесс мог завершиться во время чтения.
@@ -595,4 +588,4 @@ public sealed class ProcessRow
     public string CpuText { get; set; } = "";
     public string MemoryText { get; set; } = "";
     public string PathText { get; set; } = "";
-} 
+}

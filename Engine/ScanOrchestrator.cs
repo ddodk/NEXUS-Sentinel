@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NEXUS.Sentinel.Data;
 using NEXUS.Sentinel.Models;
 using NEXUS.Sentinel.Services;
 
@@ -32,6 +33,41 @@ public sealed class ScanOrchestrator
                 ? PeParser.Parse
                 : (path, _) => parsePe(path));
         _analyzePe = analyzePe ?? (_ => Array.Empty<HeuristicFinding>());
+    }
+
+    public static Task<ScanResult> AnalyzeFileAsync(
+        string filePath,
+        EventStore? eventStore = null,
+        CancellationToken cancellationToken = default)
+    {
+        return new ScanOrchestrator(
+            eventStore is null
+                ? null
+                : (type, message) => eventStore.Add(type, message))
+            .ScanAsync(filePath, cancellationToken);
+    }
+
+    internal static Verdict ApplyHeuristic(
+        Verdict currentVerdict,
+        ICollection<HeuristicFinding> existingFindings,
+        HeuristicFinding finding)
+    {
+        if (existingFindings.Any(item => string.Equals(
+                item.RuleId,
+                finding.RuleId,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return currentVerdict;
+        }
+
+        existingFindings.Add(finding);
+
+        if (currentVerdict == Verdict.Malicious)
+            return Verdict.Malicious;
+
+        return currentVerdict == Verdict.Clean
+            ? Verdict.Suspicious
+            : currentVerdict;
     }
 
     public async Task<ScanResult> ScanAsync(

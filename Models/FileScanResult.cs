@@ -1,3 +1,5 @@
+using System;
+
 namespace NEXUS.Sentinel.Models;
 
 public sealed class FileScanResult

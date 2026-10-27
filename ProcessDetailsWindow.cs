@@ -348,6 +348,10 @@ public sealed class ProcessDetailsWindow : Window
             fields.Add(("Версия файла", EmptyAsUnavailable(version.FileVersion)));
             fields.Add(("Компания", EmptyAsUnavailable(version.CompanyName)));
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (OutOfMemoryException)
         {
             throw;
@@ -363,6 +367,10 @@ public sealed class ProcessDetailsWindow : Window
             fields.Add((
                 "Размер файла",
                 $"{new FileInfo(path).Length / 1024.0:F1} KB"));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (OutOfMemoryException)
         {
