@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -41,9 +40,6 @@ public static class PeParser
                 return NotPe();
 
             uint peOffsetValue = ReadUInt32(reader, 0x3C);
-            if (peOffsetValue > long.MaxValue)
-                return Corrupted("PE header offset is invalid.");
-
             long peOffset = peOffsetValue;
 
             if (peOffset < 64 || peOffset > fileLength - 24)
