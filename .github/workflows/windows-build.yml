@@ -1,41 +1,51 @@
 
-name: NEXUS Sentinel Windows Build
+name: NEXUS Sentinel Build and Tests
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/nexus-ui-security-upgrades
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  test:
+    name: Build and test
     runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install .NET
+      - name: Install .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
-      - name: Restore
+      - name: Show .NET information
+        run: dotnet --info
+
+      - name: Find project files
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path . -Recurse -Filter *.csproj |
+            Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } |
+            Select-Object -ExpandProperty FullName
+
+      - name: Restore application
         run: dotnet restore NEXUS.Sentinel.csproj
 
-      - name: Build
+      - name: Build application
         run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
 
-      - name: Publish Windows x64 application
-        run: dotnet publish NEXUS.Sentinel.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+      - name: Restore tests
+        run: dotnet restore Tests/NexusSentinel.Tests.csproj
 
-      - name: Upload Windows application
-        uses: actions/upload-artifact@v4
-        with:
-          name: NEXUS-Sentinel-Windows-x64
-          path: bin/Release/net8.0-windows/win-x64/publish/
-          if-no-files-found: error
+      - name: Run tests
+        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
