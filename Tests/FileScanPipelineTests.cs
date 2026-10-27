@@ -11,6 +11,9 @@ namespace NexusSentinel.Tests;
 
 public sealed class FileScanPipelineTests
 {
+    private static NEXUS.Sentinel.Data.EventStore InMemoryEventStore(int maxEvents = 512) =>
+        new(maxEvents, persistToDisk: false);
+
     private static string TempFile(byte[] content)
     {
         string path = Path.Combine(
@@ -98,7 +101,7 @@ public sealed class FileScanPipelineTests
         {
             var result = await FileScanPipeline.AnalyzeFileAsync(
                 path,
-                new NEXUS.Sentinel.Data.EventStore(512));
+                InMemoryEventStore());
 
             Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
             Assert.Equal(Verdict.Suspicious, result.Verdict);
@@ -122,7 +125,7 @@ public sealed class FileScanPipelineTests
         {
             var result = await FileScanPipeline.AnalyzeFileAsync(
                 path,
-                new NEXUS.Sentinel.Data.EventStore(512));
+                InMemoryEventStore());
 
             Assert.Equal(PeFormatStatus.NotPe, result.Pe?.FormatStatus);
             Assert.DoesNotContain(
@@ -148,7 +151,7 @@ public sealed class FileScanPipelineTests
         {
             var result = await FileScanPipeline.AnalyzeFileAsync(
                 path,
-                new NEXUS.Sentinel.Data.EventStore(512));
+                InMemoryEventStore());
 
             Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
             Assert.Equal(Verdict.Suspicious, result.Verdict);
@@ -175,7 +178,7 @@ public sealed class FileScanPipelineTests
 
         var result = await FileScanPipeline.AnalyzeFileAsync(
             missingPath,
-            new NEXUS.Sentinel.Data.EventStore(512));
+            InMemoryEventStore());
 
         Assert.Equal(ScanOutcome.Error, result.Outcome);
         Assert.NotEqual(Verdict.Clean, result.Verdict);
@@ -231,7 +234,7 @@ public sealed class FileScanPipelineTests
             await Assert.ThrowsAsync<OperationCanceledException>(
                 () => FileScanPipeline.AnalyzeFileAsync(
                     path,
-                    new NEXUS.Sentinel.Data.EventStore(512),
+                    InMemoryEventStore(),
                     cts.Token));
         }
         finally

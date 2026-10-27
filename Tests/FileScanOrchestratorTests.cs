@@ -14,6 +14,9 @@ namespace NexusSentinel.Tests;
 
 public sealed class ScanOrchestratorTests
 {
+    private static EventStore InMemoryEventStore(int maxEvents = 256) =>
+        new(maxEvents, persistToDisk: false);
+
     private static string TempFile(byte[] content)
     {
         string path = Path.Combine(
@@ -97,7 +100,7 @@ public sealed class ScanOrchestratorTests
 
         try
         {
-            var eventStore = new EventStore(256);
+            var eventStore = InMemoryEventStore();
             var result = await ScanOrchestrator.AnalyzeFileAsync(path, eventStore);
 
             Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
@@ -118,7 +121,7 @@ public sealed class ScanOrchestratorTests
 
         try
         {
-            var result = await ScanOrchestrator.AnalyzeFileAsync(path, new EventStore(256));
+            var result = await ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore());
 
             Assert.Equal(PeFormatStatus.NotPe, result.Pe?.FormatStatus);
             Assert.DoesNotContain(result.Heuristics, item => item.RuleId == "PE_CORRUPTED");
@@ -140,7 +143,7 @@ public sealed class ScanOrchestratorTests
 
         try
         {
-            var result = await ScanOrchestrator.AnalyzeFileAsync(path, new EventStore(256));
+            var result = await ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore());
 
             Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
             Assert.Equal(Verdict.Suspicious, result.Verdict);
@@ -162,43 +165,33 @@ public sealed class ScanOrchestratorTests
             Path.GetTempPath(),
             $"missing-{Guid.NewGuid():N}.bin");
 
-        var result = await ScanOrchestrator.AnalyzeFileAsync(path, new EventStore(256));
+        var result = await ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore());
 
         Assert.Equal(ScanOutcome.Error, result.Outcome);
         Assert.NotEqual(Verdict.Clean, result.Verdict);
     }
 
     [Fact]
-    public async Task MaliciousVerdict_IsNotDowngradedByPeCorruption()
+    public void MaliciousVerdict_IsNotDowngradedByAdditionalFinding()
     {
-        byte[] data = new byte[128];
-        BitConverter.GetBytes((ushort)0x5A4D).CopyTo(data, 0);
-        BitConverter.GetBytes((uint)64).CopyTo(data, 0x3C);
-        string path = TempFile(data);
-        var scanner = new ScanOrchestrator(
-            analyzePe: _ => new[]
-            {
-                new HeuristicFinding(
-                    "HIGH_RISK_TEST",
-                    "Test finding",
-                    75,
-                    "Test evidence")
-            });
-
-        try
+        var existingFindings = new List<HeuristicFinding>
         {
-            ScanResult result = await scanner.ScanAsync(path);
+            new("THREAT_TEST", "High risk", 75, "Test evidence")
+        };
 
-            Assert.Equal(Verdict.Malicious, result.Verdict);
-            Assert.Equal(ScanOutcome.Malicious, result.Outcome);
-            Assert.Contains(
-                result.Heuristics,
-                item => item.RuleId == "PE_CORRUPTED");
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        Verdict result = ScanOrchestrator.ApplyHeuristic(
+            Verdict.Malicious,
+            existingFindings,
+            new HeuristicFinding(
+                "PE_CORRUPTED",
+                "Corrupted PE",
+                25,
+                "Parser validation failed"));
+
+        Assert.Equal(Verdict.Malicious, result);
+        Assert.Contains(
+            existingFindings,
+            finding => finding.RuleId == "PE_CORRUPTED");
     }
 
     [Fact]
@@ -212,7 +205,7 @@ public sealed class ScanOrchestratorTests
 
         try
         {
-            var result = await ScanOrchestrator.AnalyzeFileAsync(path, new EventStore(256));
+            var result = await ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore());
             var matches = result.Heuristics.Count(item => item.RuleId == "PE_CORRUPTED");
 
             Assert.Equal(1, matches);
@@ -234,7 +227,7 @@ public sealed class ScanOrchestratorTests
         try
         {
             await Assert.ThrowsAsync<OperationCanceledException>(
-                () => ScanOrchestrator.AnalyzeFileAsync(path, new EventStore(256), cts.Token));
+                () => ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore(), cts.Token));
         }
         finally
         {
@@ -249,7 +242,7 @@ public sealed class ScanOrchestratorTests
             Path.GetTempPath(),
             $"missing-{Guid.NewGuid():N}.bin");
 
-        var eventStore = new EventStore(256);
+        var eventStore = InMemoryEventStore();
         var result = await ScanOrchestrator.AnalyzeFileAsync(path, eventStore);
 
         Assert.Equal(ScanOutcome.Error, result.Outcome);

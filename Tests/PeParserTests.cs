@@ -484,6 +484,28 @@ public sealed class PeParserTests
     }
 
     [Fact]
+    public void Valid_Pe_Header_Alignment_Is_Not_Reported_As_Overlay()
+    {
+        byte[] data = BuildPe32(optionalSize: 96);
+        Array.Resize(ref data, 512);
+        const int optionalStart = 0x40 + 4 + 20;
+        BitConverter.GetBytes(512u).CopyTo(data, optionalStart + 60);
+        string path = TempFile(data);
+
+        try
+        {
+            PeAnalysisResult result = PeParser.Parse(path);
+
+            Assert.Equal(PeFormatStatus.PeValid, result.FormatStatus);
+            Assert.False(result.HasOverlay);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Valid_Pe32_With_One_Directory_At_Boundary()
     {
         string path = TempFile(
@@ -551,6 +573,90 @@ public sealed class PeParserTests
                 sections: 1,
                 sectionData: new byte[16],
                 rawPointer: 100000));
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_When_Raw_Section_Ranges_Overlap()
+    {
+        const int peOffset = 0x40;
+        const int optionalStart = peOffset + 4 + 20;
+        const int sectionTable = optionalStart + 224;
+        const int rawData = sectionTable + 2 * 40;
+        byte[] data = BuildPe32(
+            sections: 2,
+            sectionData: new byte[128],
+            rawSize: 64);
+
+        BitConverter.GetBytes(64u).CopyTo(data, sectionTable + 8);
+        BitConverter.GetBytes(0x1000u).CopyTo(data, sectionTable + 12);
+        BitConverter.GetBytes(0x2000u).CopyTo(data, sectionTable + 40 + 12);
+        BitConverter.GetBytes(64u).CopyTo(data, sectionTable + 40 + 16);
+        BitConverter.GetBytes((uint)(rawData + 32)).CopyTo(
+            data,
+            sectionTable + 40 + 20);
+        BitConverter.GetBytes(64u).CopyTo(data, sectionTable + 40 + 8);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_When_Virtual_Section_Ranges_Overlap()
+    {
+        const int peOffset = 0x40;
+        const int optionalStart = peOffset + 4 + 20;
+        const int sectionTable = optionalStart + 224;
+        byte[] data = BuildPe32(sections: 2);
+
+        BitConverter.GetBytes(64u).CopyTo(data, sectionTable + 8);
+        BitConverter.GetBytes(0x1000u).CopyTo(data, sectionTable + 12);
+        BitConverter.GetBytes(64u).CopyTo(data, sectionTable + 40 + 8);
+        BitConverter.GetBytes(0x1030u).CopyTo(data, sectionTable + 40 + 12);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_When_Virtual_Section_Range_Exceeds_Rva_Space()
+    {
+        const int peOffset = 0x40;
+        const int optionalStart = peOffset + 4 + 20;
+        const int sectionTable = optionalStart + 224;
+        byte[] data = BuildPe32(sections: 1);
+
+        BitConverter.GetBytes(uint.MaxValue).CopyTo(data, sectionTable + 8);
+        BitConverter.GetBytes(0xFFFFFFF0u).CopyTo(data, sectionTable + 12);
+        string path = TempFile(data);
 
         try
         {
@@ -688,11 +794,16 @@ public sealed class PeParserTests
             sections: 1,
             rawSize: 1024,
             rawPointer: 1024));
+        bool peAnalysisRan = false;
         var scanner = new ScanOrchestrator(
-            analyzePe: _ => new[]
+            analyzePe: _ =>
             {
-                new HeuristicFinding(
-                    "PE_CORRUPTED", "duplicate", 25, "duplicate")
+                peAnalysisRan = true;
+                return new[]
+                {
+                    new HeuristicFinding(
+                        "PE_CORRUPTED", "incorrect weight", 99, "provided by analyzer")
+                };
             });
 
         try
@@ -703,6 +814,7 @@ public sealed class PeParserTests
                 .ToArray();
 
             Assert.Equal(PeFormatStatus.PeCorrupted, result.Pe?.FormatStatus);
+            Assert.False(peAnalysisRan);
             HeuristicFinding finding = Assert.Single(findings);
             Assert.Equal(25, finding.Weight);
             Assert.Equal(Verdict.Suspicious, result.Verdict);
@@ -791,6 +903,34 @@ public sealed class PeParserTests
                 loggedEvents,
                 item => item.Type == "FileScanError");
             Assert.DoesNotContain(path, loggedEvents[0].Message);
+            Assert.Contains("unexpected", loggedEvents[0].Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Scan_Redacts_File_Path_From_Error_Results()
+    {
+        string path = TempFile(new byte[] { 1, 2, 3 });
+        var scanner = new ScanOrchestrator(
+            hashFile: (filePath, _) => Task.FromResult(new FileScanResult
+            {
+                FilePath = filePath,
+                Success = false,
+                Status = "Read failed",
+                Error = $"Cannot read {filePath}"
+            }));
+
+        try
+        {
+            ScanResult result = await scanner.ScanAsync(path);
+
+            Assert.Equal(ScanOutcome.Error, result.Outcome);
+            Assert.DoesNotContain(path, result.Error);
+            Assert.Contains("<file>", result.Error);
         }
         finally
         {
@@ -814,6 +954,59 @@ public sealed class PeParserTests
 
             Assert.Equal(Verdict.Malicious, result.Verdict);
             Assert.Equal(ScanOutcome.Malicious, result.Outcome);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Scan_Low_Weight_Finding_Is_Not_Clean()
+    {
+        string path = TempFile(BuildPe32());
+        var scanner = new ScanOrchestrator(
+            analyzePe: _ => new[]
+            {
+                new HeuristicFinding(
+                    "LOW_WEIGHT_TEST",
+                    "Test finding",
+                    1,
+                    "Test evidence")
+            });
+
+        try
+        {
+            ScanResult result = await scanner.ScanAsync(path);
+
+            Assert.Equal(Verdict.Suspicious, result.Verdict);
+            Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Scan_Deduplicates_Heuristics_By_Rule_Id()
+    {
+        string path = TempFile(BuildPe32());
+        var scanner = new ScanOrchestrator(
+            analyzePe: _ => new[]
+            {
+                new HeuristicFinding("DUPLICATE_RULE", "first", 5, "first"),
+                new HeuristicFinding("duplicate_rule", "second", 10, "second")
+            });
+
+        try
+        {
+            ScanResult result = await scanner.ScanAsync(path);
+
+            HeuristicFinding finding = Assert.Single(result.Heuristics);
+            Assert.Equal("first", finding.Evidence);
+            Assert.Equal(5, result.RiskScore);
+            Assert.Equal(Verdict.Suspicious, result.Verdict);
         }
         finally
         {
@@ -921,6 +1114,22 @@ public sealed class PeParserTests
     }
 
     [Fact]
+    public async Task Cancellation_Takes_Precedence_Over_Invalid_Paths()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => new ScanOrchestrator().ScanAsync("", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => FileHashService.CalculateSha256Async("", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AuthenticodeVerifier.VerifyAsync("", cancellation.Token));
+        Assert.ThrowsAny<OperationCanceledException>(
+            () => PeParser.Parse("", cancellation.Token));
+    }
+
+    [Fact]
     public async Task Scan_Returns_Error_When_File_Changes_During_Analysis()
     {
         string path = TempFile(BuildPe32());
@@ -998,6 +1207,37 @@ public sealed class PeParserTests
     }
 
     [Fact]
+    public async Task AuthenticodeVerifier_Reports_Platform_Result_For_Existing_File()
+    {
+        string path = TempFile(new byte[] { 1, 2, 3, 4 });
+
+        try
+        {
+            AuthenticodeResult result =
+                await AuthenticodeVerifier.VerifyAsync(path);
+
+            Assert.Contains(
+                result.Status,
+                new[]
+                {
+                    "Valid",
+                    "NotSigned",
+                    "HashMismatch",
+                    "NotTrusted",
+                    "UnknownError",
+                    "CheckFailed"
+                });
+
+            if (result.Status == "CheckFailed")
+                Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task AuthenticodeVerifier_Propagates_Cancellation()
     {
         string path = TempFile(new byte[] { 1 });
@@ -1015,5 +1255,27 @@ public sealed class PeParserTests
         {
             File.Delete(path);
         }
+    }
+
+    [Theory]
+    [InlineData("NotSigned", "", "NotSigned", false)]
+    [InlineData("HashMismatch", "", "HashMismatch", false)]
+    [InlineData("NotTrusted", "2020-01-01T00:00:00.0000000+00:00", "NotTrusted", true)]
+    [InlineData("NotTrusted", "2099-01-01T00:00:00.0000000+00:00", "NotTrusted", false)]
+    [InlineData("Valid", "2020-01-01T00:00:00.0000000+00:00", "Valid", false)]
+    public void AuthenticodeResult_Preserves_Windows_Status_Semantics(
+        string windowsStatus,
+        string notAfter,
+        string expectedStatus,
+        bool certificateExpired)
+    {
+        string json = "{\"Status\":\"" + windowsStatus +
+            "\",\"NotAfter\":\"" + notAfter + "\"}";
+
+        AuthenticodeResult result = AuthenticodeVerifier.ParseResult(json);
+
+        Assert.Equal(expectedStatus, result.Status);
+        Assert.Equal(expectedStatus == "Valid", result.IsValid);
+        Assert.Equal(certificateExpired, result.SignerCertificateExpired);
     }
 }

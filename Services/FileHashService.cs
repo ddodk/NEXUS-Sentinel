@@ -16,6 +16,8 @@ public static class FileHashService
         string filePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(filePath))
             return Failure(filePath, "Путь к файлу не указан.");
 
@@ -52,7 +54,8 @@ public static class FileHashService
             while (true)
             {
                 int bytesRead = await stream.ReadAsync(
-                    buffer.AsMemory(), cancellationToken);
+                    buffer.AsMemory(), cancellationToken)
+                    .ConfigureAwait(false);
 
                 if (bytesRead == 0)
                     break;

@@ -74,6 +74,8 @@ public sealed class ScanOrchestrator
         string? path,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(path))
             return Failure(path, "Путь к файлу не указан.");
 
@@ -115,7 +117,7 @@ public sealed class ScanOrchestrator
                     hash);
             }
 
-                    cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
             var identity = new FileIdentity(
                 fullPath,
@@ -149,31 +151,44 @@ public sealed class ScanOrchestrator
                     pe: pe);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!FileMatchesHash(fullPath, hash))
             {
-                    return Failure(
-                        fullPath,
-                        "Файл изменился во время анализа.",
-                        hash,
-                        identity,
-                        pe);
+                return Failure(
+                    fullPath,
+                    "Файл изменился во время анализа.",
+                    hash,
+                    identity,
+                    pe);
             }
 
             IReadOnlyList<HeuristicFinding> analyzedFindings =
-                pe.FormatStatus == PeFormatStatus.NotPe
-                    ? Array.Empty<HeuristicFinding>()
-                    : _analyzePe(pe);
+                pe.FormatStatus == PeFormatStatus.PeValid
+                    ? _analyzePe(pe)
+                    : Array.Empty<HeuristicFinding>();
 
-            var findings = analyzedFindings
-                .Where(finding => !string.Equals(
-                    finding.RuleId,
-                    PeCorruptedRuleId,
-                    StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var findings = new List<HeuristicFinding>();
+            Verdict verdict = Verdict.Clean;
+
+            foreach (HeuristicFinding finding in analyzedFindings)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (string.Equals(
+                        finding.RuleId,
+                        PeCorruptedRuleId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                verdict = ApplyHeuristic(verdict, findings, finding);
+            }
 
             if (pe.FormatStatus == PeFormatStatus.PeCorrupted)
             {
-                findings.Add(new HeuristicFinding(
+                verdict = ApplyHeuristic(verdict, findings, new HeuristicFinding(
                     PeCorruptedRuleId,
                     "Структура PE повреждена или некорректна.",
                     25,
@@ -184,11 +199,9 @@ public sealed class ScanOrchestrator
                 100L,
                 findings.Sum(finding => (long)Math.Max(0, finding.Weight)));
 
-            Verdict verdict = riskScore >= 75
+            verdict = riskScore >= 75
                 ? Verdict.Malicious
-                : findings.Count == 0 || riskScore >= 25
-                    ? Verdict.Suspicious
-                    : Verdict.Clean;
+                : Verdict.Suspicious;
 
             return new ScanResult(
                 identity,
@@ -207,6 +220,9 @@ public sealed class ScanOrchestrator
         }
         catch (OutOfMemoryException)
         {
+            TryLogError(SanitizeError(
+                fullPath,
+                "Недостаточно памяти для анализа файла."));
             throw;
         }
         catch (Exception ex)
@@ -224,7 +240,8 @@ public sealed class ScanOrchestrator
         FileIdentity? identity = null,
         PeAnalysisResult? pe = null)
     {
-        TryLogError();
+        string safeMessage = SanitizeError(path, message);
+        TryLogError(safeMessage);
 
         identity ??= new FileIdentity(
             path ?? string.Empty,
@@ -244,21 +261,51 @@ public sealed class ScanOrchestrator
             pe,
             null,
             null,
-            message);
+            safeMessage);
     }
 
-    private void TryLogError()
+    private void TryLogError(string message)
     {
         try
         {
             _logEvent?.Invoke(
                 "FileScanError",
-                "Ошибка сканирования файла.");
+                $"Ошибка сканирования файла: {message}");
         }
         catch
         {
             // A logging failure must not turn a failed scan into a success.
         }
+    }
+
+    private static string SanitizeError(string? path, string message)
+    {
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            message = message.Replace(
+                path,
+                "<file>",
+                StringComparison.OrdinalIgnoreCase);
+
+            try
+            {
+                string fullPath = Path.GetFullPath(path);
+                message = message.Replace(
+                    fullPath,
+                    "<file>",
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (
+                ex is ArgumentException ||
+                ex is NotSupportedException ||
+                ex is PathTooLongException)
+            {
+            }
+        }
+
+        return message.Length > 240
+            ? message[..240]
+            : message;
     }
 
     private static bool FileMatchesHash(

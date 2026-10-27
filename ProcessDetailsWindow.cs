@@ -164,7 +164,7 @@ public sealed class ProcessDetailsWindow : Window
             _sha256Button.IsEnabled = false;
             _sha256Text.Text = "Вычисление...";
             _sha256Status.Text = "Чтение файла и расчёт хеша.";
-            
+
             if (_copyHashButton != null)
             {
                 hashPanel.Children.Remove(_copyHashButton);
@@ -389,6 +389,10 @@ public sealed class ProcessDetailsWindow : Window
                 "Время запуска",
                 process.StartTime.ToString("yyyy-MM-dd HH:mm:ss")));
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (OutOfMemoryException)
         {
             throw;
@@ -464,6 +468,9 @@ public sealed class ProcessDetailsWindow : Window
         };
 
         AddField(panel, "Результат", statusText);
+
+        if (result.SignerCertificateExpired)
+            AddField(panel, "Срок сертификата", "Сертификат подписанта истёк.");
 
         if (!string.IsNullOrWhiteSpace(result.StatusMessage))
         {

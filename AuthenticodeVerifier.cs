@@ -1,6 +1,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -16,6 +17,7 @@ public sealed class AuthenticodeResult
     public string Issuer { get; init; } = "";
     public string NotBefore { get; init; } = "";
     public string NotAfter { get; init; } = "";
+    public bool SignerCertificateExpired { get; init; }
     public string Error { get; init; } = "";
 
     public bool IsValid =>
@@ -36,6 +38,8 @@ public static class AuthenticodeVerifier
         string filePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(filePath))
         {
             return Failure("Путь к файлу не указан.");
@@ -94,23 +98,24 @@ public static class AuthenticodeVerifier
 
             try
             {
-                await process.WaitForExitAsync(timeout.Token);
+                await process.WaitForExitAsync(timeout.Token)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 TryKill(process);
+                _ = ObservePipeCompletionAsync(outputTask);
+                _ = ObservePipeCompletionAsync(errorTask);
 
                 if (cancellationToken.IsCancellationRequested)
                     throw;
-
-                await Task.WhenAll(outputTask, errorTask);
 
                 return Failure(
                     "Проверка превысила лимит времени в 10 секунд.");
             }
 
-            string output = await outputTask;
-            string error = await errorTask;
+            string output = await outputTask.ConfigureAwait(false);
+            string error = await errorTask.ConfigureAwait(false);
 
             if (process.ExitCode != 0)
             {
@@ -120,20 +125,7 @@ public static class AuthenticodeVerifier
                         : error.Trim());
             }
 
-            using JsonDocument document =
-                JsonDocument.Parse(output);
-
-            JsonElement root = document.RootElement;
-
-            return new AuthenticodeResult
-            {
-                Status = ReadString(root, "Status"),
-                StatusMessage = ReadString(root, "StatusMessage"),
-                Signer = ReadString(root, "Signer"),
-                Issuer = ReadString(root, "Issuer"),
-                NotBefore = ReadString(root, "NotBefore"),
-                NotAfter = ReadString(root, "NotAfter")
-            };
+            return ParseResult(output);
         }
         catch (OperationCanceledException)
         {
@@ -146,6 +138,45 @@ public static class AuthenticodeVerifier
         catch (Exception ex)
         {
             return Failure(ex.Message);
+        }
+    }
+
+    internal static AuthenticodeResult ParseResult(string output)
+    {
+        using JsonDocument document = JsonDocument.Parse(output);
+        JsonElement root = document.RootElement;
+
+        string status = ReadString(root, "Status");
+        string notAfter = ReadString(root, "NotAfter");
+        bool certificateExpired =
+            string.Equals(status, "NotTrusted", StringComparison.OrdinalIgnoreCase) &&
+            DateTimeOffset.TryParse(
+                notAfter,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out DateTimeOffset certificateExpiry) &&
+            certificateExpiry < DateTimeOffset.UtcNow;
+
+        return new AuthenticodeResult
+        {
+            Status = status,
+            StatusMessage = ReadString(root, "StatusMessage"),
+            Signer = ReadString(root, "Signer"),
+            Issuer = ReadString(root, "Issuer"),
+            NotBefore = ReadString(root, "NotBefore"),
+            NotAfter = notAfter,
+            SignerCertificateExpired = certificateExpired
+        };
+    }
+
+    private static async Task ObservePipeCompletionAsync(Task<string> task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch
+        {
         }
     }
 

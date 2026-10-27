@@ -18,20 +18,28 @@ public sealed class SentinelEvent
 public sealed class EventStore
 {
     private readonly object _sync = new();
-    private readonly string _filePath;
+    private readonly string? _filePath;
     private readonly int _maxEvents;
     private readonly List<SentinelEvent> _events = new();
 
     public EventStore(int maxEvents = 2000)
+        : this(maxEvents, persistToDisk: true)
+    {
+    }
+
+    internal EventStore(int maxEvents, bool persistToDisk)
     {
         _maxEvents = Math.Clamp(maxEvents, 100, 20000);
 
-        string directory = Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData),
-            "NEXUS", "Sentinel");
+        if (persistToDisk)
+        {
+            string directory = Path.Combine(
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.LocalApplicationData),
+                "NEXUS", "Sentinel");
 
-        _filePath = Path.Combine(directory, "events.json");
+            _filePath = Path.Combine(directory, "events.json");
+        }
 
         Load();
     }
@@ -78,7 +86,7 @@ public sealed class EventStore
         {
             try
             {
-                if (!File.Exists(_filePath))
+                if (_filePath is null || !File.Exists(_filePath))
                     return;
 
                 string json = File.ReadAllText(_filePath);
@@ -101,6 +109,9 @@ public sealed class EventStore
 
     private void Save()
     {
+        if (_filePath is null)
+            return;
+
         try
         {
             string? directory = Path.GetDirectoryName(_filePath);

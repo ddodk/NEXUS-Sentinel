@@ -22,6 +22,8 @@ public static class PeParser
         string path,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(path))
         {
             return Error("File path is empty.");
@@ -145,7 +147,7 @@ public static class PeParser
 
             double maxEntropy = 0;
             bool hasWriteExecuteSection = false;
-            long lastRawEnd = sectionsStart + sectionBytes;
+            long lastRawEnd = sizeOfHeaders;
             int sectionsRead = 0;
             int entropyBytesRemaining =
                 PeParserLimits.MaxTotalSectionEntropyBytes;
@@ -162,11 +164,6 @@ public static class PeParser
                 uint rawSize = ReadUInt32(reader, sectionOffset + 16);
                 uint rawPointer = ReadUInt32(reader, sectionOffset + 20);
                 uint characteristics = ReadUInt32(reader, sectionOffset + 36);
-                sections.Add(new SectionRange(
-                    virtualAddress,
-                    virtualSize,
-                    rawPointer,
-                    rawSize));
 
                 if (rawSize > 0)
                 {
@@ -177,9 +174,55 @@ public static class PeParser
                         rawPointer < sizeOfHeaders)
                         return Corrupted("Section raw data exceeds the file.");
 
+                    foreach (SectionRange existingSection in sections)
+                    {
+                        if (existingSection.RawSize == 0)
+                            continue;
+
+                        long existingEnd = (long)existingSection.RawPointer +
+                                           existingSection.RawSize;
+
+                        if (rawPointer < existingEnd &&
+                            existingSection.RawPointer < rawEnd)
+                        {
+                            return Corrupted(
+                                "Section raw data ranges overlap.");
+                        }
+                    }
+
                     if (rawEnd > lastRawEnd)
                         lastRawEnd = rawEnd;
                 }
+
+                long virtualSizeForRange = Math.Max(virtualSize, rawSize);
+
+                if (virtualSizeForRange > (long)uint.MaxValue + 1L - virtualAddress)
+                    return Corrupted("Section virtual range exceeds RVA space.");
+
+                long virtualEnd = (long)virtualAddress + virtualSizeForRange;
+
+                foreach (SectionRange existingSection in sections)
+                {
+                    long existingSize = Math.Max(
+                        existingSection.VirtualSize,
+                        existingSection.RawSize);
+                    long existingEnd =
+                        (long)existingSection.VirtualAddress + existingSize;
+
+                    if (virtualSizeForRange > 0 &&
+                        existingSize > 0 &&
+                        virtualAddress < existingEnd &&
+                        existingSection.VirtualAddress < virtualEnd)
+                    {
+                        return Corrupted("Section virtual ranges overlap.");
+                    }
+                }
+
+                sections.Add(new SectionRange(
+                    virtualAddress,
+                    virtualSize,
+                    rawPointer,
+                    rawSize));
 
                 const uint MemExecute = 0x20000000;
                 const uint MemWrite = 0x80000000;
