@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, string> _knownProcesses = new();
     private readonly EventStore _eventStore = new();
     private readonly ScanOrchestrator _scanOrchestrator;
+    private readonly CancellationTokenSource _shutdownCancellation = new();
 
     private readonly DataSourceStatus _processStatus = new()
     {
@@ -64,6 +66,7 @@ public partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
+            _shutdownCancellation.Cancel();
             _timer.Stop();
 
             _eventStore.Add(
@@ -189,7 +192,12 @@ public partial class MainWindow : Window
 
         try
         {
-            var result = await _scanOrchestrator.ScanAsync(path);
+            var result = await _scanOrchestrator.ScanAsync(
+                path,
+                _shutdownCancellation.Token);
+
+            if (!IsLoaded)
+                return;
 
             if (!string.IsNullOrEmpty(result.File.Hash.Sha256))
             {
@@ -242,12 +250,15 @@ public partial class MainWindow : Window
 
                 _eventStore.Add(
                     "FileScanCompleted",
-                    $"Файл {Path.GetFileName(path)}: " +
+                    $"Сканирование завершено: " +
                     $"{result.Outcome}, риск {result.RiskScore}.");
             }
         }
         catch (OperationCanceledException)
         {
+            if (!IsLoaded)
+                return;
+
             Sha256Text.Text = "Сканирование отменено";
             ScanResultText.Text = "Сканирование отменено.";
             ScanResultText.Foreground = Brushes.Orange;
@@ -260,17 +271,24 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            if (!IsLoaded)
+                return;
+
             Sha256Text.Text = "Хеш не получен";
             ScanResultText.Text = $"Ошибка: {ex.Message}";
             ScanResultText.Foreground = Brushes.Orange;
 
             ScannerStatusText.Text = "Ошибка";
             ScannerStatusText.Foreground = Brushes.Orange;
+            _eventStore.Add(
+                "FileScanUiError",
+                "Не удалось отобразить результат сканирования.");
         }
         finally
         {
             _isScanning = false;
-            ScanFileButton.IsEnabled = true;
+            if (IsLoaded)
+                ScanFileButton.IsEnabled = true;
         }
     }
 
@@ -300,7 +318,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RefreshProcesses()
+    private async void RefreshProcesses()
     {
         if (_isRefreshing)
             return;
@@ -310,113 +328,26 @@ public partial class MainWindow : Window
         try
         {
             long now = Stopwatch.GetTimestamp();
-
             double elapsedSeconds = _lastSampleTimestamp == 0
                 ? 0
                 : Stopwatch.GetElapsedTime(
                     _lastSampleTimestamp,
                     now).TotalSeconds;
-
             _lastSampleTimestamp = now;
 
-            var nextCpuSamples =
-                new Dictionary<int, TimeSpan>();
+            ProcessSnapshot snapshot = await Task.Run(
+                () => CaptureProcessSnapshot(
+                    new Dictionary<int, TimeSpan>(_previousCpu),
+                    elapsedSeconds,
+                    _shutdownCancellation.Token),
+                _shutdownCancellation.Token);
 
-            var rows = new List<ProcessRow>();
-            var currentProcesses = new Dictionary<int, string>();
+            if (!IsLoaded)
+                return;
 
-            foreach (Process process in Process.GetProcesses())
-            {
-                using (process)
-                {
-                    try
-                    {
-                        int id = process.Id;
-                        string name = process.ProcessName;
-
-                        long memoryBytes = 0;
-                        TimeSpan cpuTime = TimeSpan.Zero;
-                        bool hasCpuTime = false;
-                        string path = "Недоступен";
-
-                        try
-                        {
-                            memoryBytes = process.WorkingSet64;
-                        }
-                        catch
-                        {
-                            // Доступ к памяти может быть ограничен.
-                        }
-
-                        try
-                        {
-                            cpuTime = process.TotalProcessorTime;
-                            hasCpuTime = true;
-                        }
-                        catch
-                        {
-                            // Доступ к CPU может быть ограничен.
-                        }
-
-                        try
-                        {
-                            string? filePath =
-                                process.MainModule?.FileName;
-
-                            if (!string.IsNullOrWhiteSpace(filePath))
-                                path = filePath;
-                        }
-                        catch
-                        {
-                            // Путь может быть недоступен.
-                        }
-
-                        currentProcesses[id] = name;
-
-                        string cpuText = "Сбор данных";
-
-                        if (hasCpuTime)
-                        {
-                            if (_previousCpu.TryGetValue(
-                                    id,
-                                    out TimeSpan previousCpu)
-                                && elapsedSeconds >= 0.5)
-                            {
-                                double cpuPercent =
-                                    (cpuTime - previousCpu).TotalMilliseconds
-                                    / (elapsedSeconds * 1000.0)
-                                    / Environment.ProcessorCount
-                                    * 100.0;
-
-                                cpuPercent = Math.Clamp(
-                                    cpuPercent, 0.0, 100.0);
-
-                                cpuText = $"{cpuPercent:F1} %";
-                            }
-
-                            nextCpuSamples[id] = cpuTime;
-                        }
-                        else
-                        {
-                            cpuText = "Недоступен";
-                        }
-
-                        rows.Add(new ProcessRow
-                        {
-                            ProcessName = name,
-                            Id = id,
-                            CpuText = cpuText,
-                            MemoryText =
-                                $"{memoryBytes / 1024.0 / 1024.0:F1} MB",
-                            PathText = path
-                        });
-                    }
-                    catch
-                    {
-                        // Процесс мог завершиться во время чтения.
-                    }
-                }
-            }
+            var nextCpuSamples = snapshot.CpuSamples;
+            var rows = snapshot.Rows;
+            var currentProcesses = snapshot.ProcessNames;
 
             foreach (var item in currentProcesses)
             {
@@ -460,7 +391,6 @@ public partial class MainWindow : Window
                 _previousCpu[sample.Key] = sample.Value;
 
             string query = FilterBox.Text.Trim();
-
             var visibleRows = rows
                 .Where(row =>
                     query.Length == 0
@@ -488,6 +418,9 @@ public partial class MainWindow : Window
 
             _hasLoggedMonitorError = false;
         }
+        catch (OperationCanceledException)
+        {
+        }
         catch (Exception ex)
         {
             _processStatus.MarkError(ex.Message);
@@ -510,6 +443,124 @@ public partial class MainWindow : Window
         }
     }
 
+    private static ProcessSnapshot CaptureProcessSnapshot(
+        IReadOnlyDictionary<int, TimeSpan> previousCpu,
+        double elapsedSeconds,
+        CancellationToken cancellationToken)
+    {
+        var cpuSamples = new Dictionary<int, TimeSpan>();
+        var rows = new List<ProcessRow>();
+        var processNames = new Dictionary<int, string>();
+
+        foreach (Process process in Process.GetProcesses())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using (process)
+            {
+                try
+                {
+                    int id = process.Id;
+                    string name = process.ProcessName;
+                    long memoryBytes = 0;
+                    bool hasMemory = false;
+                    TimeSpan cpuTime = TimeSpan.Zero;
+                    bool hasCpuTime = false;
+                    string path = "Недоступен";
+
+                    try
+                    {
+                        memoryBytes = process.WorkingSet64;
+                        hasMemory = true;
+                    }
+                    catch (OutOfMemoryException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                    }
+
+                    try
+                    {
+                        cpuTime = process.TotalProcessorTime;
+                        hasCpuTime = true;
+                    }
+                    catch (OutOfMemoryException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                    }
+
+                    try
+                    {
+                        string? filePath = process.MainModule?.FileName;
+
+                        if (!string.IsNullOrWhiteSpace(filePath))
+                            path = filePath;
+                    }
+                    catch (OutOfMemoryException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                    }
+
+                    processNames[id] = name;
+
+                    string cpuText = "Сбор данных";
+
+                    if (hasCpuTime)
+                    {
+                        if (previousCpu.TryGetValue(
+                                id,
+                                out TimeSpan previousCpuTime)
+                            && elapsedSeconds >= 0.5)
+                        {
+                            double cpuPercent =
+                                (cpuTime - previousCpuTime).TotalMilliseconds
+                                / (elapsedSeconds * 1000.0)
+                                / Environment.ProcessorCount
+                                * 100.0;
+
+                            cpuText = $"{Math.Clamp(cpuPercent, 0.0, 100.0):F1} %";
+                        }
+
+                        cpuSamples[id] = cpuTime;
+                    }
+                    else
+                    {
+                        cpuText = "Недоступен";
+                    }
+
+                    rows.Add(new ProcessRow
+                    {
+                        ProcessName = name,
+                        Id = id,
+                        CpuText = cpuText,
+                        MemoryText = hasMemory
+                            ? $"{memoryBytes / 1024.0 / 1024.0:F1} MB"
+                            : "Недоступен",
+                        PathText = path
+                    });
+                }
+                catch (OutOfMemoryException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Процесс мог завершиться во время чтения.
+                }
+            }
+        }
+
+        return new ProcessSnapshot(rows, processNames, cpuSamples);
+    }
+
     private void StatusTextUpdate(string message)
     {
         // Строка статуса выводится в заголовке окна.
@@ -530,6 +581,11 @@ public partial class MainWindow : Window
 
         return $"{size:F2} {units[unit]}";
     }
+
+    private sealed record ProcessSnapshot(
+        List<ProcessRow> Rows,
+        Dictionary<int, string> ProcessNames,
+        Dictionary<int, TimeSpan> CpuSamples);
 }
 
 public sealed class ProcessRow

@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using NexusSentinel.Engine;
+using NEXUS.Sentinel;
 using NEXUS.Sentinel.Models;
 using NEXUS.Sentinel.Services;
 using Xunit;
@@ -67,6 +68,9 @@ public sealed class PeParserTests
 
         if (optionalHeaderSize >= 2)
             Put16(optionalStart, magic);
+
+        if (optionalHeaderSize >= 64)
+            Put32(optionalStart + 60, (uint)dataStart);
 
         int directoryCountOffset = magic == 0x010B
             ? optionalStart + 92
@@ -172,6 +176,23 @@ public sealed class PeParserTests
     }
 
     [Fact]
+    public void Corrupted_For_Truncated_Dos_Header_With_Mz()
+    {
+        string path = TempFile(new byte[] { 0x4D, 0x5A, 0, 0 });
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void NotPe_For_No_Mz()
     {
         byte[] data = new byte[128];
@@ -254,6 +275,63 @@ public sealed class PeParserTests
     }
 
     [Fact]
+    public void Corrupted_For_Maximum_Pe_Header_Offset()
+    {
+        byte[] data = new byte[128];
+        BitConverter.GetBytes((ushort)0x5A4D).CopyTo(data, 0);
+        BitConverter.GetBytes(uint.MaxValue).CopyTo(data, 0x3C);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_For_Unknown_Optional_Header_Magic()
+    {
+        string path = TempFile(BuildPe(0, 224, 0x9999));
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_When_SizeOfHeaders_Is_Truncated()
+    {
+        byte[] data = BuildPe32();
+        const int optionalStart = 0x40 + 4 + 20;
+        BitConverter.GetBytes(64u).CopyTo(data, optionalStart + 60);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Corrupted_For_Too_Many_Sections()
     {
         string path = TempFile(
@@ -316,6 +394,28 @@ public sealed class PeParserTests
     {
         string path = TempFile(
             BuildPe32(optionalSize: 224, directories: 100));
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_When_DataDirectory_Rva_Is_Not_FileBacked()
+    {
+        byte[] data = BuildPe32(directories: 1);
+        const int optionalStart = 0x40 + 4 + 20;
+        const int firstDirectory = optionalStart + 96;
+        BitConverter.GetBytes(0x70000000u).CopyTo(data, firstDirectory);
+        BitConverter.GetBytes(16u).CopyTo(data, firstDirectory + 4);
+        string path = TempFile(data);
 
         try
         {
@@ -618,9 +718,9 @@ public sealed class PeParserTests
     {
         string path = TempFile(new byte[] { 1, 2, 3 });
         File.Delete(path);
-        var loggedEvents = new System.Collections.Generic.List<string>();
+        var loggedEvents = new System.Collections.Generic.List<(string Type, string Message)>();
         var scanner = new ScanOrchestrator(
-            (type, _) => loggedEvents.Add(type));
+            (type, message) => loggedEvents.Add((type, message)));
 
         try
         {
@@ -629,7 +729,10 @@ public sealed class PeParserTests
             Assert.Equal(ScanOutcome.Error, result.Outcome);
             Assert.NotEqual(Verdict.Clean, result.Verdict);
             Assert.False(string.IsNullOrWhiteSpace(result.Error));
-            Assert.Contains("FileScanError", loggedEvents);
+            Assert.Contains(
+                loggedEvents,
+                item => item.Type == "FileScanError");
+            Assert.DoesNotContain(path, loggedEvents[0].Message);
         }
         finally
         {
@@ -662,6 +765,32 @@ public sealed class PeParserTests
             Assert.Equal(ScanOutcome.Error, result.Outcome);
             Assert.NotEqual(Verdict.Clean, result.Verdict);
             Assert.Equal(PeFormatStatus.ParseError, result.Pe?.FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Scan_Unexpected_Parser_Exception_Is_Logged_And_Error()
+    {
+        string path = TempFile(BuildPe32());
+        var loggedEvents = new System.Collections.Generic.List<(string Type, string Message)>();
+        var scanner = new ScanOrchestrator(
+            (type, message) => loggedEvents.Add((type, message)),
+            parsePe: _ => throw new InvalidOperationException("unexpected"));
+
+        try
+        {
+            ScanResult result = await scanner.ScanAsync(path);
+
+            Assert.Equal(ScanOutcome.Error, result.Outcome);
+            Assert.NotEqual(Verdict.Clean, result.Verdict);
+            Assert.Contains(
+                loggedEvents,
+                item => item.Type == "FileScanError");
+            Assert.DoesNotContain(path, loggedEvents[0].Message);
         }
         finally
         {
@@ -740,6 +869,39 @@ public sealed class PeParserTests
     }
 
     [Fact]
+    public async Task FileHashService_Rejects_Files_Above_Size_Limit()
+    {
+        string path = Path.Combine(
+            Path.GetTempPath(),
+            $"nexus-{Guid.NewGuid():N}.bin");
+
+        try
+        {
+            using (var stream = new FileStream(
+                       path,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None))
+            {
+                stream.SetLength(FileHashService.MaxFileSizeBytes + 1);
+            }
+
+            FileScanResult result =
+                await FileHashService.CalculateSha256Async(path);
+
+            Assert.False(result.Success);
+            Assert.Contains("превышает лимит", result.Error);
+            Assert.Empty(result.Sha256);
+            Assert.Empty(result.Sha512);
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task Scan_OutOfMemory_Is_Propagated()
     {
         string path = TempFile(new byte[] { 1, 2, 3 });
@@ -751,6 +913,103 @@ public sealed class PeParserTests
         {
             await Assert.ThrowsAsync<OutOfMemoryException>(
                 () => scanner.ScanAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Scan_Returns_Error_When_File_Changes_During_Analysis()
+    {
+        string path = TempFile(BuildPe32());
+        var scanner = new ScanOrchestrator(
+            hashFile: async (filePath, token) =>
+            {
+                FileScanResult hash =
+                    await FileHashService.CalculateSha256Async(
+                        filePath, token);
+
+                return new FileScanResult
+                {
+                    FilePath = hash.FilePath,
+                    Sha256 = hash.Sha256,
+                    Sha512 = hash.Sha512,
+                    FileSizeBytes = hash.FileSizeBytes,
+                    LastWriteUtc = hash.LastWriteUtc.AddSeconds(-10),
+                    CheckedAt = hash.CheckedAt,
+                    Success = hash.Success,
+                    Status = hash.Status,
+                    Error = hash.Error
+                };
+            });
+
+        try
+        {
+            ScanResult result = await scanner.ScanAsync(path);
+
+            Assert.Equal(ScanOutcome.Error, result.Outcome);
+            Assert.NotEqual(Verdict.Clean, result.Verdict);
+            Assert.Contains("изменился", result.Error);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Scan_Propagates_Cancellation_From_Parser()
+    {
+        string path = TempFile(BuildPe32());
+        using var cancellation = new CancellationTokenSource();
+        var scanner = new ScanOrchestrator(
+            parsePeWithCancellation: (_, token) =>
+            {
+                cancellation.Cancel();
+                token.ThrowIfCancellationRequested();
+                throw new InvalidOperationException("unreachable");
+            });
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => scanner.ScanAsync(path, cancellation.Token));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task AuthenticodeVerifier_Returns_Error_For_Missing_File()
+    {
+        string path = Path.Combine(
+            Path.GetTempPath(),
+            $"missing-{Guid.NewGuid():N}.exe");
+
+        AuthenticodeResult result =
+            await AuthenticodeVerifier.VerifyAsync(path);
+
+        Assert.Equal("CheckFailed", result.Status);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+    }
+
+    [Fact]
+    public async Task AuthenticodeVerifier_Propagates_Cancellation()
+    {
+        string path = TempFile(new byte[] { 1 });
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => AuthenticodeVerifier.VerifyAsync(
+                    path,
+                    cancellation.Token));
         }
         finally
         {

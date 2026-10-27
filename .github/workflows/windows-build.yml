@@ -47,5 +47,8 @@ jobs:
       - name: Restore tests
         run: dotnet restore Tests/NexusSentinel.Tests.csproj
 
+      - name: Build tests
+        run: dotnet build Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore
+
       - name: Run tests
-        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
+        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-build --no-restore --logger "console;verbosity=normal"

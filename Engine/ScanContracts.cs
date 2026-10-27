@@ -68,6 +68,7 @@ public static class PeParserLimits
 {
     public const int MaxSections = 96;
     public const int MaxSectionEntropyBytes = 4 * 1024 * 1024;
+    public const int MaxTotalSectionEntropyBytes = 32 * 1024 * 1024;
     public const int EntropyChunkSize = 64 * 1024;
     public const int MaxOptionalHeaderSize = 4096;
     public const int MinOptionalHeaderSizePe32 = 96;

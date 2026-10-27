@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
 
 namespace NexusSentinel.Engine;
 
@@ -15,6 +16,13 @@ public static class PeParser
 
     public static PeAnalysisResult Parse(string path)
     {
+        return Parse(path, CancellationToken.None);
+    }
+
+    public static PeAnalysisResult Parse(
+        string path,
+        CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(path))
         {
             return Error("File path is empty.");
@@ -22,6 +30,8 @@ public static class PeParser
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             using var stream = new FileStream(
                 path,
                 FileMode.Open,
@@ -32,13 +42,16 @@ public static class PeParser
 
             long fileLength = stream.Length;
 
-            if (fileLength < 64)
+            if (fileLength < sizeof(ushort))
                 return NotPe();
 
             using var reader = new BinaryReader(stream);
 
             if (ReadUInt16(reader, 0) != DosSignature)
                 return NotPe();
+
+            if (fileLength < 64)
+                return Corrupted("DOS header is truncated.");
 
             uint peOffsetValue = ReadUInt32(reader, 0x3C);
             long peOffset = peOffsetValue;
@@ -94,9 +107,28 @@ public static class PeParser
             uint numberOfDirectories = ReadUInt32(reader, numberOfDirectoriesOffset);
             long directoryBytes = (long)numberOfDirectories *
                                   PeParserLimits.DataDirectoryEntrySize;
+            long directoryStart = numberOfDirectoriesOffset + 4;
 
-            if (directoryBytes > optionalEnd - numberOfDirectoriesOffset - 4)
+            if (directoryBytes > optionalEnd - directoryStart)
                 return Corrupted("Data directories exceed the optional header.");
+
+            var dataDirectories = new List<(int Index, uint Address, uint Size)>();
+
+            for (int i = 0; i < numberOfDirectories; i++)
+            {
+                long directoryOffset = directoryStart +
+                    (long)i * PeParserLimits.DataDirectoryEntrySize;
+                uint address = ReadUInt32(reader, directoryOffset);
+                uint size = ReadUInt32(reader, directoryOffset + 4);
+
+                if (address == 0 && size == 0)
+                    continue;
+
+                if (address == 0 || size == 0)
+                    return Corrupted("Data directory has an incomplete range.");
+
+                dataDirectories.Add((i, address, size));
+            }
 
             long sectionsStart = optionalEnd;
             long sectionBytes = (long)numberOfSections * 40;
@@ -104,24 +136,46 @@ public static class PeParser
             if (sectionsStart > fileLength - sectionBytes)
                 return Corrupted("Section table is truncated.");
 
+            uint sizeOfHeaders = ReadUInt32(reader, optionalStart + 60);
+
+            if (sizeOfHeaders < sectionsStart + sectionBytes ||
+                sizeOfHeaders > fileLength)
+            {
+                return Corrupted("PE header size is outside the file.");
+            }
+
             double maxEntropy = 0;
             bool hasWriteExecuteSection = false;
             long lastRawEnd = sectionsStart + sectionBytes;
             int sectionsRead = 0;
+            int entropyBytesRemaining =
+                PeParserLimits.MaxTotalSectionEntropyBytes;
+            var sections = new List<SectionRange>(numberOfSections);
 
             for (int i = 0; i < numberOfSections; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 long sectionOffset = sectionsStart + (long)i * 40;
 
+                uint virtualSize = ReadUInt32(reader, sectionOffset + 8);
+                uint virtualAddress = ReadUInt32(reader, sectionOffset + 12);
                 uint rawSize = ReadUInt32(reader, sectionOffset + 16);
                 uint rawPointer = ReadUInt32(reader, sectionOffset + 20);
                 uint characteristics = ReadUInt32(reader, sectionOffset + 36);
+                sections.Add(new SectionRange(
+                    virtualAddress,
+                    virtualSize,
+                    rawPointer,
+                    rawSize));
 
                 if (rawSize > 0)
                 {
                     long rawEnd = (long)rawPointer + rawSize;
 
-                    if (rawEnd < rawPointer || rawEnd > fileLength)
+                    if (rawEnd < rawPointer ||
+                        rawEnd > fileLength ||
+                        rawPointer < sizeOfHeaders)
                         return Corrupted("Section raw data exceeds the file.");
 
                     if (rawEnd > lastRawEnd)
@@ -137,22 +191,44 @@ public static class PeParser
                     hasWriteExecuteSection = true;
                 }
 
-                int bytesToRead = (int)Math.Min(
-                    rawSize,
-                    PeParserLimits.MaxSectionEntropyBytes);
+                int bytesToRead = Math.Min(
+                    entropyBytesRemaining,
+                    (int)Math.Min(
+                        rawSize,
+                        PeParserLimits.MaxSectionEntropyBytes));
 
                 if (bytesToRead > 0)
                 {
                     double entropy = CalculateEntropy(
                         stream,
                         rawPointer,
-                        bytesToRead);
+                        bytesToRead,
+                        cancellationToken);
+
+                    entropyBytesRemaining -= bytesToRead;
 
                     if (entropy > maxEntropy)
                         maxEntropy = entropy;
                 }
 
                 sectionsRead++;
+            }
+
+            for (int i = 0; i < dataDirectories.Count; i++)
+            {
+                (int index, uint address, uint size) = dataDirectories[i];
+
+                bool valid = index == 4
+                    ? (long)address + size <= fileLength
+                    : IsRvaRangeInFile(
+                        address,
+                        size,
+                        sizeOfHeaders,
+                        fileLength,
+                        sections);
+
+                if (!valid)
+                    return Corrupted("Data directory range exceeds file data.");
             }
 
             bool hasOverlay = lastRawEnd < fileLength;
@@ -193,6 +269,43 @@ public static class PeParser
         return reader.ReadUInt16();
     }
 
+    private static bool IsRvaRangeInFile(
+        uint address,
+        uint size,
+        uint sizeOfHeaders,
+        long fileLength,
+        IReadOnlyList<SectionRange> sections)
+    {
+        long rangeStart = address;
+        long rangeSize = size;
+
+        if (rangeStart < sizeOfHeaders)
+        {
+            return rangeStart + rangeSize <= sizeOfHeaders
+                && rangeStart + rangeSize <= fileLength;
+        }
+
+        foreach (SectionRange section in sections)
+        {
+            long delta = rangeStart - section.VirtualAddress;
+
+            long virtualExtent = Math.Max(
+                section.VirtualSize,
+                section.RawSize);
+
+            if (delta < 0 || delta > virtualExtent || delta > section.RawSize)
+                continue;
+
+            if (rangeSize > section.RawSize - delta)
+                continue;
+
+            long fileStart = (long)section.RawPointer + delta;
+            return fileStart + rangeSize <= fileLength;
+        }
+
+        return false;
+    }
+
     private static uint ReadUInt32(BinaryReader reader, long offset)
     {
         reader.BaseStream.Position = offset;
@@ -202,7 +315,8 @@ public static class PeParser
     private static double CalculateEntropy(
         Stream stream,
         long offset,
-        int length)
+        int length,
+        CancellationToken cancellationToken)
     {
         long originalPosition = stream.Position;
         stream.Position = offset;
@@ -215,11 +329,14 @@ public static class PeParser
         {
             while (remaining > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 int requested = Math.Min(buffer.Length, remaining);
                 int read = stream.Read(buffer, 0, requested);
 
                 if (read <= 0)
-                    break;
+                    throw new EndOfStreamException(
+                        "Section data changed while it was being read.");
 
                 for (int i = 0; i < read; i++)
                     frequencies[buffer[i]]++;
@@ -294,4 +411,10 @@ public static class PeParser
             Array.Empty<string>(),
             message);
     }
+
+    private sealed record SectionRange(
+        uint VirtualAddress,
+        uint VirtualSize,
+        uint RawPointer,
+        uint RawSize);
 }

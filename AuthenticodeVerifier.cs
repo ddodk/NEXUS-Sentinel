@@ -1,7 +1,10 @@
 
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NEXUS.Sentinel;
 
@@ -26,13 +29,25 @@ public static class AuthenticodeVerifier
 {
     public static AuthenticodeResult Verify(string filePath)
     {
+        return VerifyAsync(filePath).GetAwaiter().GetResult();
+    }
+
+    public static async Task<AuthenticodeResult> VerifyAsync(
+        string filePath,
+        CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(filePath))
         {
             return Failure("Путь к файлу не указан.");
         }
 
+        if (!File.Exists(filePath))
+            return Failure("Файл не найден или недоступен.");
+
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
@@ -70,22 +85,32 @@ public static class AuthenticodeVerifier
             if (!process.Start())
                 return Failure("Не удалось запустить PowerShell.");
 
-            if (!process.WaitForExit(10000))
+            using var timeout = CancellationTokenSource
+                .CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> errorTask = process.StandardError.ReadToEndAsync();
+
+            try
             {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch
-                {
-                }
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                TryKill(process);
+
+                if (cancellationToken.IsCancellationRequested)
+                    throw;
+
+                await Task.WhenAll(outputTask, errorTask);
 
                 return Failure(
                     "Проверка превысила лимит времени в 10 секунд.");
             }
 
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
+            string output = await outputTask;
+            string error = await errorTask;
 
             if (process.ExitCode != 0)
             {
@@ -110,9 +135,29 @@ public static class AuthenticodeVerifier
                 NotAfter = ReadString(root, "NotAfter")
             };
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return Failure(ex.Message);
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
         }
     }
 

@@ -14,7 +14,7 @@ public sealed class ScanOrchestrator
     private const string PeCorruptedRuleId = "PE_CORRUPTED";
 
     private readonly Func<string, CancellationToken, Task<FileScanResult>> _hashFile;
-    private readonly Func<string, PeAnalysisResult> _parsePe;
+    private readonly Func<string, CancellationToken, PeAnalysisResult> _parsePe;
     private readonly Func<PeAnalysisResult, IReadOnlyList<HeuristicFinding>> _analyzePe;
     private readonly Action<string, string>? _logEvent;
 
@@ -22,11 +22,15 @@ public sealed class ScanOrchestrator
         Action<string, string>? logEvent = null,
         Func<string, CancellationToken, Task<FileScanResult>>? hashFile = null,
         Func<string, PeAnalysisResult>? parsePe = null,
-        Func<PeAnalysisResult, IReadOnlyList<HeuristicFinding>>? analyzePe = null)
+        Func<PeAnalysisResult, IReadOnlyList<HeuristicFinding>>? analyzePe = null,
+        Func<string, CancellationToken, PeAnalysisResult>? parsePeWithCancellation = null)
     {
         _logEvent = logEvent;
         _hashFile = hashFile ?? FileHashService.CalculateSha256Async;
-        _parsePe = parsePe ?? PeParser.Parse;
+        _parsePe = parsePeWithCancellation ??
+            (parsePe is null
+                ? PeParser.Parse
+                : (path, _) => parsePe(path));
         _analyzePe = analyzePe ?? (_ => Array.Empty<HeuristicFinding>());
     }
 
@@ -55,6 +59,15 @@ public sealed class ScanOrchestrator
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            await using var analysisGuard = new FileStream(
+                fullPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 4096,
+                options: FileOptions.Asynchronous |
+                         FileOptions.SequentialScan);
+
             FileScanResult hash = await _hashFile(
                 fullPath, cancellationToken);
 
@@ -77,7 +90,18 @@ public sealed class ScanOrchestrator
                     hash.LastWriteUtc),
                 DateTime.UtcNow);
 
-            PeAnalysisResult pe = _parsePe(fullPath);
+            if (!FileMatchesHash(fullPath, hash))
+            {
+                return Failure(
+                    fullPath,
+                    "Файл изменился после вычисления хеша.",
+                    hash,
+                    identity: identity);
+            }
+
+            PeAnalysisResult pe = await Task.Run(
+                () => _parsePe(fullPath, cancellationToken),
+                cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             if (pe.FormatStatus == PeFormatStatus.ParseError)
@@ -87,6 +111,16 @@ public sealed class ScanOrchestrator
                     pe.ParseError ?? "Не удалось разобрать файл.",
                     identity: identity,
                     pe: pe);
+            }
+
+            if (!FileMatchesHash(fullPath, hash))
+            {
+                    return Failure(
+                        fullPath,
+                        "Файл изменился во время анализа.",
+                        hash,
+                        identity,
+                        pe);
             }
 
             IReadOnlyList<HeuristicFinding> analyzedFindings =
@@ -110,8 +144,9 @@ public sealed class ScanOrchestrator
                     pe.ParseError ?? "Обнаружена некорректная структура PE."));
             }
 
-            int riskScore = Math.Clamp(
-                findings.Sum(finding => Math.Max(0, finding.Weight)), 0, 100);
+            int riskScore = (int)Math.Min(
+                100L,
+                findings.Sum(finding => (long)Math.Max(0, finding.Weight)));
 
             Verdict verdict = riskScore >= 75
                 ? Verdict.Malicious
@@ -153,7 +188,7 @@ public sealed class ScanOrchestrator
         FileIdentity? identity = null,
         PeAnalysisResult? pe = null)
     {
-        TryLogError(message);
+        TryLogError();
 
         identity ??= new FileIdentity(
             path ?? string.Empty,
@@ -176,15 +211,40 @@ public sealed class ScanOrchestrator
             message);
     }
 
-    private void TryLogError(string message)
+    private void TryLogError()
     {
         try
         {
-            _logEvent?.Invoke("FileScanError", message);
+            _logEvent?.Invoke(
+                "FileScanError",
+                "Ошибка сканирования файла.");
         }
         catch
         {
             // A logging failure must not turn a failed scan into a success.
+        }
+    }
+
+    private static bool FileMatchesHash(
+        string path,
+        FileScanResult hash)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            file.Refresh();
+
+            return file.Exists
+                && file.Length == hash.FileSizeBytes
+                && file.LastWriteTimeUtc == hash.LastWriteUtc;
+        }
+        catch (Exception ex) when (
+            ex is IOException ||
+            ex is UnauthorizedAccessException ||
+            ex is ArgumentException ||
+            ex is NotSupportedException)
+        {
+            return false;
         }
     }
 

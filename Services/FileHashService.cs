@@ -10,6 +10,8 @@ namespace NEXUS.Sentinel.Services;
 
 public static class FileHashService
 {
+    public const long MaxFileSizeBytes = 2L * 1024 * 1024 * 1024;
+
     public static async Task<FileScanResult> CalculateSha256Async(
         string filePath,
         CancellationToken cancellationToken = default)
@@ -31,12 +33,21 @@ public static class FileHashService
                          FileOptions.SequentialScan);
 
             long fileSize = stream.Length;
+            DateTime lastWriteUtc = File.GetLastWriteTimeUtc(filePath);
+
+            if (fileSize > MaxFileSizeBytes)
+            {
+                return Failure(
+                    filePath,
+                    "Размер файла превышает лимит сканирования в 2 GiB.");
+            }
 
             using var sha256 = IncrementalHash.CreateHash(
                 HashAlgorithmName.SHA256);
             using var sha512 = IncrementalHash.CreateHash(
                 HashAlgorithmName.SHA512);
             byte[] buffer = new byte[81920];
+            long bytesProcessed = 0;
 
             while (true)
             {
@@ -46,8 +57,25 @@ public static class FileHashService
                 if (bytesRead == 0)
                     break;
 
+                bytesProcessed += bytesRead;
+
+                if (bytesProcessed > MaxFileSizeBytes)
+                {
+                    return Failure(
+                        filePath,
+                        "Размер файла превысил лимит во время чтения.");
+                }
+
                 sha256.AppendData(buffer, 0, bytesRead);
                 sha512.AppendData(buffer, 0, bytesRead);
+            }
+
+            if (stream.Length != fileSize ||
+                File.GetLastWriteTimeUtc(filePath) != lastWriteUtc)
+            {
+                return Failure(
+                    filePath,
+                    "Файл изменился во время вычисления хеша.");
             }
 
             return new FileScanResult
@@ -56,7 +84,7 @@ public static class FileHashService
                 Sha256 = Convert.ToHexString(sha256.GetHashAndReset()),
                 Sha512 = Convert.ToHexString(sha512.GetHashAndReset()),
                 FileSizeBytes = fileSize,
-                LastWriteUtc = File.GetLastWriteTimeUtc(filePath),
+                LastWriteUtc = lastWriteUtc,
                 CheckedAt = DateTime.Now,
                 Success = true,
                 Status = "Хеш вычислен успешно"

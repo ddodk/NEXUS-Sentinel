@@ -2,6 +2,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -13,6 +15,7 @@ namespace NEXUS.Sentinel;
 public sealed class ProcessDetailsWindow : Window
 {
     private readonly ProcessRow _row;
+    private readonly CancellationTokenSource _windowCancellation = new();
 
     private readonly TextBlock _sha256Text = new()
     {
@@ -34,6 +37,11 @@ public sealed class ProcessDetailsWindow : Window
     public ProcessDetailsWindow(ProcessRow row)
     {
         _row = row;
+        Closed += (_, _) =>
+        {
+            _windowCancellation.Cancel();
+            _windowCancellation.Dispose();
+        };
 
         Title = $"NEXUS Sentinel — {_row.ProcessName}";
         Width = 720;
@@ -111,67 +119,17 @@ public sealed class ProcessDetailsWindow : Window
             && path != "Недоступен"
             && File.Exists(path);
 
-        AddSection(content, "Метаданные файла");
+        var metadataPanel = new StackPanel();
+        AddSection(metadataPanel, "Метаданные файла");
+        content.Children.Add(metadataPanel);
 
         if (fileAvailable)
-        {
-            try
-            {
-                var version = FileVersionInfo.GetVersionInfo(path);
-
-                AddField(
-                    content,
-                    "Описание",
-                    EmptyAsUnavailable(version.FileDescription));
-
-                AddField(
-                    content,
-                    "Версия файла",
-                    EmptyAsUnavailable(version.FileVersion));
-
-                AddField(
-                    content,
-                    "Компания",
-                    EmptyAsUnavailable(version.CompanyName));
-
-                AddField(
-                    content,
-                    "Размер файла",
-                    $"{new FileInfo(path).Length / 1024.0:F1} KB");
-            }
-            catch (Exception ex)
-            {
-                AddField(
-                    content,
-                    "Метаданные",
-                    $"Недоступны: {ex.Message}");
-            }
-
-            try
-            {
-                using Process process =
-                    Process.GetProcessById(_row.Id);
-
-                AddField(
-                    content,
-                    "Время запуска",
-                    process.StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
-            }
-            catch
-            {
-                AddField(
-                    content,
-                    "Время запуска",
-                    "Недоступно: доступ ограничен или процесс завершился.");
-            }
-        }
+            AddField(metadataPanel, "Статус", "Загрузка метаданных...");
         else
-        {
             AddField(
-                content,
+                metadataPanel,
                 "Файл",
                 "Путь недоступен или файл уже не существует.");
-        }
 
         // SHA-256
         var hashPanel = new StackPanel();
@@ -216,7 +174,9 @@ public sealed class ProcessDetailsWindow : Window
             try
             {
                 var result =
-                    await FileHashService.CalculateSha256Async(path);
+                    await FileHashService.CalculateSha256Async(
+                        path,
+                        _windowCancellation.Token);
 
                 if (!IsLoaded)
                     return;
@@ -261,8 +221,15 @@ public sealed class ProcessDetailsWindow : Window
                         result.Error ?? result.Status;
                 }
             }
+            catch (OutOfMemoryException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
+                if (!IsLoaded)
+                    return;
+
                 _sha256Text.Text = "Ошибка";
                 _sha256Status.Text = ex.Message;
             }
@@ -312,7 +279,120 @@ public sealed class ProcessDetailsWindow : Window
         Content = root;
 
         if (fileAvailable)
-            _ = LoadSignatureAsync(signaturePanel, path);
+        {
+            Loaded += (_, _) =>
+            {
+                _ = LoadFileMetadataAsync(
+                    metadataPanel,
+                    path,
+                    _row.Id,
+                    _windowCancellation.Token);
+                _ = LoadSignatureAsync(signaturePanel, path);
+            };
+        }
+    }
+
+    private async Task LoadFileMetadataAsync(
+        Panel panel,
+        string path,
+        int processId,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<(string Label, string Value)> fields;
+
+        try
+        {
+            fields = await Task.Run(
+                () => ReadFileMetadata(path, processId, cancellationToken),
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
+        }
+        catch
+        {
+            if (!IsLoaded)
+                return;
+
+            fields = new[] { ("Метаданные", "Недоступны.") };
+        }
+
+        if (!IsLoaded)
+            return;
+
+        panel.Children.Clear();
+        AddSection(panel, "Метаданные файла");
+
+        foreach (var field in fields)
+            AddField(panel, field.Label, field.Value);
+    }
+
+    private static IReadOnlyList<(string Label, string Value)> ReadFileMetadata(
+        string path,
+        int processId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var fields = new List<(string Label, string Value)>();
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            FileVersionInfo version = FileVersionInfo.GetVersionInfo(path);
+            fields.Add(("Описание", EmptyAsUnavailable(version.FileDescription)));
+            fields.Add(("Версия файла", EmptyAsUnavailable(version.FileVersion)));
+            fields.Add(("Компания", EmptyAsUnavailable(version.CompanyName)));
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
+        }
+        catch
+        {
+            fields.Add(("Метаданные", "Недоступны."));
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            fields.Add((
+                "Размер файла",
+                $"{new FileInfo(path).Length / 1024.0:F1} KB"));
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
+        }
+        catch
+        {
+            fields.Add(("Размер файла", "Недоступен."));
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using Process process = Process.GetProcessById(processId);
+            fields.Add((
+                "Время запуска",
+                process.StartTime.ToString("yyyy-MM-dd HH:mm:ss")));
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
+        }
+        catch
+        {
+            fields.Add((
+                "Время запуска",
+                "Недоступно: доступ ограничен или процесс завершился."));
+        }
+
+        return fields;
     }
 
     private async Task LoadSignatureAsync(
@@ -323,8 +403,17 @@ public sealed class ProcessDetailsWindow : Window
 
         try
         {
-            result = await Task.Run(
-                () => AuthenticodeVerifier.Verify(path));
+            result = await AuthenticodeVerifier.VerifyAsync(
+                path,
+                _windowCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

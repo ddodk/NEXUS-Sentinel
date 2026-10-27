@@ -23,6 +23,7 @@
     <Compile Include="../Engine/ScanOrchestrator.cs" Link="Engine/ScanOrchestrator.cs" />
     <Compile Include="../Models/FileScanResult.cs" Link="Models/FileScanResult.cs" />
     <Compile Include="../Services/FileHashService.cs" Link="Services/FileHashService.cs" />
+    <Compile Include="../AuthenticodeVerifier.cs" Link="AuthenticodeVerifier.cs" />
   </ItemGroup>
 
 </Project>
