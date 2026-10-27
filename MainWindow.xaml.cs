@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using NEXUS.Sentinel.Data;
 using NEXUS.Sentinel.Diagnostics;
+using NexusSentinel.Engine;
 using NEXUS.Sentinel.Services;
 
 namespace NEXUS.Sentinel;
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, TimeSpan> _previousCpu = new();
     private readonly Dictionary<int, string> _knownProcesses = new();
     private readonly EventStore _eventStore = new();
+    private readonly ScanOrchestrator _scanOrchestrator;
 
     private readonly DataSourceStatus _processStatus = new()
     {
@@ -37,6 +39,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        _scanOrchestrator = new ScanOrchestrator(
+            (type, message) => _eventStore.Add(type, message));
 
         ProcessGrid.ItemsSource = new List<ProcessRow>();
 
@@ -184,40 +189,74 @@ public partial class MainWindow : Window
 
         try
         {
-            var result =
-                await FileHashService.CalculateSha256Async(path);
+            var result = await _scanOrchestrator.ScanAsync(path);
 
-            if (result.Success)
+            if (!string.IsNullOrEmpty(result.File.Hash.Sha256))
             {
-                _lastSha256 = result.Sha256;
-                Sha256Text.Text = result.Sha256;
+                _lastSha256 = result.File.Hash.Sha256;
+                Sha256Text.Text = result.File.Hash.Sha256;
                 CopyHashButton.IsEnabled = true;
-
-                string sizeText =
-                    FormatFileSize(result.FileSizeBytes);
-
-                ScanResultText.Text =
-                    $"Успешно • Размер: {sizeText} • " +
-                    $"Время: {result.CheckedAt:HH:mm:ss}";
-
-                ScanResultText.Foreground = Brushes.LightGreen;
-                ScannerStatusText.Text = "Завершён";
-                ScannerStatusText.Foreground = Brushes.LightGreen;
-
-                _eventStore.Add(
-                    "FileHashCalculated",
-                    $"Вычислен SHA-256 для файла: {Path.GetFileName(path)}");
             }
             else
             {
                 Sha256Text.Text = "Хеш не получен";
-                ScanResultText.Text =
-                    result.Error ?? result.Status;
+            }
 
+            if (result.Outcome == ScanOutcome.Error)
+            {
+                ScanResultText.Text = $"Ошибка: {result.Error}";
                 ScanResultText.Foreground = Brushes.Orange;
                 ScannerStatusText.Text = "Ошибка";
                 ScannerStatusText.Foreground = Brushes.Orange;
             }
+            else
+            {
+                string peStatus = result.Pe?.FormatStatus switch
+                {
+                    PeFormatStatus.PeValid => "PE: структура разобрана",
+                    PeFormatStatus.PeCorrupted => "PE: повреждён",
+                    _ => "PE: не обнаружен"
+                };
+                                string fileDetails = result.File.Hash.Sha256.Length == 0
+                                        ? string.Empty
+                                        : $" • Размер: {FormatFileSize(result.File.Hash.SizeBytes)}" +
+                                            $" • Время: {DateTime.Now:HH:mm:ss}";
+
+                                ScanResultText.Text = result.Heuristics.Count == 0
+                                        ? $"{result.Verdict} • Риск: {result.RiskScore}/100" +
+                                            $"{fileDetails} • " +
+                                            $"{peStatus}. Поддерживаемые индикаторы не " +
+                                            "обнаружены; безопасность файла не подтверждена."
+                                        : $"{result.Verdict} • Риск: {result.RiskScore}/100" +
+                                            $"{fileDetails} • " +
+                                            $"{peStatus}. Проверка не заменяет антивирусный анализ.";
+
+                ScannerStatusText.Text = "Завершён";
+                ScannerStatusText.Foreground = result.Verdict switch
+                {
+                    Verdict.Malicious => Brushes.OrangeRed,
+                    Verdict.Suspicious => Brushes.Orange,
+                    _ => Brushes.LightGreen
+                };
+                ScanResultText.Foreground = ScannerStatusText.Foreground;
+
+                _eventStore.Add(
+                    "FileScanCompleted",
+                    $"Файл {Path.GetFileName(path)}: " +
+                    $"{result.Outcome}, риск {result.RiskScore}.");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Sha256Text.Text = "Сканирование отменено";
+            ScanResultText.Text = "Сканирование отменено.";
+            ScanResultText.Foreground = Brushes.Orange;
+            ScannerStatusText.Text = "Отменено";
+            ScannerStatusText.Foreground = Brushes.Orange;
+        }
+        catch (OutOfMemoryException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

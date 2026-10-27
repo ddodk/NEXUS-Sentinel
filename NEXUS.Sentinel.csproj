@@ -7,9 +7,14 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>NEXUS.Sentinel</AssemblyName>
     <RootNamespace>NEXUS.Sentinel</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests/**/*.cs" />
+  </ItemGroup>
 
 </Project>
 

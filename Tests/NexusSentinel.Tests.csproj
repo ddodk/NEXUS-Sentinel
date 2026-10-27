@@ -20,6 +20,9 @@
   <ItemGroup>
     <Compile Include="../Engine/ScanContracts.cs" Link="Engine/ScanContracts.cs" />
     <Compile Include="../Engine/PeParser.cs" Link="Engine/PeParser.cs" />
+    <Compile Include="../Engine/ScanOrchestrator.cs" Link="Engine/ScanOrchestrator.cs" />
+    <Compile Include="../Models/FileScanResult.cs" Link="Models/FileScanResult.cs" />
+    <Compile Include="../Services/FileHashService.cs" Link="Services/FileHashService.cs" />
   </ItemGroup>
 
 </Project>

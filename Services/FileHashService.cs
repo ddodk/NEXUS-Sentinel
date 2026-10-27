@@ -32,22 +32,41 @@ public static class FileHashService
 
             long fileSize = stream.Length;
 
-            using var sha256 = SHA256.Create();
+            using var sha256 = IncrementalHash.CreateHash(
+                HashAlgorithmName.SHA256);
+            using var sha512 = IncrementalHash.CreateHash(
+                HashAlgorithmName.SHA512);
+            byte[] buffer = new byte[81920];
 
-            byte[] hash = await sha256.ComputeHashAsync(
-                stream, cancellationToken);
+            while (true)
+            {
+                int bytesRead = await stream.ReadAsync(
+                    buffer.AsMemory(), cancellationToken);
+
+                if (bytesRead == 0)
+                    break;
+
+                sha256.AppendData(buffer, 0, bytesRead);
+                sha512.AppendData(buffer, 0, bytesRead);
+            }
 
             return new FileScanResult
             {
                 FilePath = filePath,
-                Sha256 = Convert.ToHexString(hash),
+                Sha256 = Convert.ToHexString(sha256.GetHashAndReset()),
+                Sha512 = Convert.ToHexString(sha512.GetHashAndReset()),
                 FileSizeBytes = fileSize,
+                LastWriteUtc = File.GetLastWriteTimeUtc(filePath),
                 CheckedAt = DateTime.Now,
                 Success = true,
                 Status = "Хеш вычислен успешно"
             };
         }
         catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (OutOfMemoryException)
         {
             throw;
         }
