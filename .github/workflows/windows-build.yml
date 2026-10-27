@@ -1,4 +1,3 @@
-
 name: NEXUS Sentinel Build and Tests
 
 on:
@@ -6,9 +5,11 @@ on:
     branches:
       - main
       - feature/nexus-ui-security-upgrades
+
   pull_request:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -38,6 +39,25 @@ jobs:
             Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } |
             Select-Object -ExpandProperty FullName
 
+      - name: Check required files
+        shell: pwsh
+        run: |
+          $requiredFiles = @(
+            "NEXUS.Sentinel.csproj",
+            "Engine/ScanContracts.cs",
+            "Engine/PeParser.cs",
+            "Tests/NexusSentinel.Tests.csproj",
+            "Tests/PeParserTests.cs"
+          )
+
+          foreach ($file in $requiredFiles) {
+            if (!(Test-Path $file)) {
+              throw "Required file is missing: $file"
+            }
+
+            Write-Host "Found: $file"
+          }
+
       - name: Restore application
         run: dotnet restore NEXUS.Sentinel.csproj
 
@@ -47,5 +67,30 @@ jobs:
       - name: Restore tests
         run: dotnet restore Tests/NexusSentinel.Tests.csproj
 
+      - name: Verify xUnit package
+        shell: pwsh
+        run: |
+          $assets = "Tests/obj/project.assets.json"
+
+          if (!(Test-Path $assets)) {
+            throw "NuGet assets file was not generated: $assets"
+          }
+
+          $json = Get-Content $assets -Raw | ConvertFrom-Json
+          $packages = $json.libraries.PSObject.Properties.Name
+
+          $xunitPackage = $packages |
+            Where-Object { $_ -match '^xunit/' }
+
+          if (!$xunitPackage) {
+            throw "xUnit package is missing from restored dependencies."
+          }
+
+          Write-Host "xUnit package found:"
+          $xunitPackage | ForEach-Object { Write-Host $_ }
+
+      - name: Build tests
+        run: dotnet build Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore
+
       - name: Run tests
-        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
+        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-build --no-restore --logger "console;verbosity=normal"
