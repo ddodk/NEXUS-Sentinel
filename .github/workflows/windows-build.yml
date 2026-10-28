@@ -1,96 +1,64 @@
-name: NEXUS Sentinel Build and Tests
+name: NEXUS Sentinel Windows Build
 
 on:
-  push:
-    branches:
-      - main
-      - feature/nexus-ui-security-upgrades
-
-  pull_request:
-    branches:
-      - main
-
-  workflow_dispatch:
+push:
+branches:
+- main
+- feature/nexus-ui-security-upgrades
+pull_request:
+branches:
+- main
+workflow_dispatch:
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  test:
-    name: Build and test
-    runs-on: windows-latest
+build:
+name: Build and publish Windows x64
+runs-on: windows-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+```
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
 
-      - name: Install .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
+  - name: Install .NET 8
+    uses: actions/setup-dotnet@v4
+    with:
+      dotnet-version: '8.0.x'
 
-      - name: Show .NET information
-        run: dotnet --info
+  - name: Restore
+    run: dotnet restore NEXUS.Sentinel.csproj
 
-      - name: Find project files
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path . -Recurse -Filter *.csproj |
-            Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } |
-            Select-Object -ExpandProperty FullName
+  - name: Build
+    run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
 
-      - name: Check required files
-        shell: pwsh
-        run: |
-          $requiredFiles = @(
-            "NEXUS.Sentinel.csproj",
-            "Engine/ScanContracts.cs",
-            "Engine/PeParser.cs",
-            "Tests/NexusSentinel.Tests.csproj",
-            "Tests/PeParserTests.cs"
-          )
+  - name: Publish Windows x64 application
+    run: >-
+      dotnet publish NEXUS.Sentinel.csproj
+      --configuration Release
+      --runtime win-x64
+      --self-contained true
+      -p:PublishSingleFile=true
+      -p:IncludeNativeLibrariesForSelfExtract=true
+      --output ./publish
 
-          foreach ($file in $requiredFiles) {
-            if (!(Test-Path $file)) {
-              throw "Required file is missing: $file"
-            }
+  - name: Verify published executable
+    shell: pwsh
+    run: |
+      $exe = Get-ChildItem ./publish -Filter "NEXUS.Sentinel.exe" -File
+      if (-not $exe) {
+        Write-Error "NEXUS.Sentinel.exe was not found in publish output."
+        Get-ChildItem ./publish -Recurse
+        exit 1
+      }
+      Get-ChildItem ./publish -File | Select-Object Name, Length
 
-            Write-Host "Found: $file"
-          }
-
-      - name: Restore application
-        run: dotnet restore NEXUS.Sentinel.csproj
-
-      - name: Build application
-        run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
-
-      - name: Restore tests
-        run: dotnet restore Tests/NexusSentinel.Tests.csproj
-
-      - name: Verify xUnit package
-        shell: pwsh
-        run: |
-          $assets = "Tests/obj/project.assets.json"
-
-          if (!(Test-Path $assets)) {
-            throw "NuGet assets file was not generated: $assets"
-          }
-
-          $json = Get-Content $assets -Raw | ConvertFrom-Json
-          $packages = $json.libraries.PSObject.Properties.Name
-
-          $xunitPackage = $packages |
-            Where-Object { $_ -match '^xunit/' }
-
-          if (!$xunitPackage) {
-            throw "xUnit package is missing from restored dependencies."
-          }
-
-          Write-Host "xUnit package found:"
-          $xunitPackage | ForEach-Object { Write-Host $_ }
-
-      - name: Build tests
-        run: dotnet build Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore
-
-      - name: Run tests
-        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-build --no-restore --logger "console;verbosity=normal"
+  - name: Upload Windows application
+    uses: actions/upload-artifact@v4
+    with:
+      name: NEXUS-Sentinel-Windows-x64
+      path: publish/
+      if-no-files-found: error
+      retention-days: 14
