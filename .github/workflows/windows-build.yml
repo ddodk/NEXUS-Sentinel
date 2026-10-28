@@ -1,56 +1,71 @@
 name: NEXUS Sentinel Windows Build
 
 on:
-push:
-branches:
-- main
-- feature/nexus-ui-security-upgrades
-pull_request:
-branches:
-- main
-workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/nexus-ui-security-upgrades
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
-contents: read
+  contents: read
 
 jobs:
-build:
-name: Build and publish Windows x64
-runs-on: windows-latest
+  build:
+    name: Build and publish Windows x64
+    runs-on: windows-latest
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - name: Install .NET 8
-    uses: actions/setup-dotnet@v4
-    with:
-      dotnet-version: '8.0.x'
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-  - name: Restore
-    run: dotnet restore NEXUS.Sentinel.csproj
+      - name: Restore
+        run: dotnet restore NEXUS.Sentinel.csproj
 
-  - name: Build
-    run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
+      - name: Build
+        run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
 
-  - name: Publish Windows x64 application
-    run: dotnet publish NEXUS.Sentinel.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output ./publish
+      - name: Publish Windows x64 application
+        shell: pwsh
+        run: |
+          dotnet publish NEXUS.Sentinel.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            --output ./publish
 
-  - name: Verify published executable
-    shell: pwsh
-    run: |
-      $exe = Get-ChildItem ./publish -Filter "NEXUS.Sentinel.exe" -File
-      if (-not $exe) {
-        Write-Error "NEXUS.Sentinel.exe was not found in publish output."
-        Get-ChildItem ./publish -Recurse
-        exit 1
-      }
-      Get-ChildItem ./publish -File | Select-Object Name, Length
+      - name: Verify published executable
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem ./publish -Recurse -File
+          if (-not $files) {
+            Write-Error "Publish output is empty."
+            exit 1
+          }
 
-  - name: Upload Windows application
-    uses: actions/upload-artifact@v4
-    with:
-      name: NEXUS-Sentinel-Windows-x64
-      path: publish/
-      if-no-files-found: error
-      retention-days: 14
+          $exe = $files | Where-Object { $_.Name -eq 'NEXUS.Sentinel.exe' }
+          if (-not $exe) {
+            Write-Error "NEXUS.Sentinel.exe was not found in publish output."
+            $files | Select-Object FullName, Length
+            exit 1
+          }
+
+          $files | Select-Object FullName, Length
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXUS-Sentinel-Windows-x64
+          path: ./publish/**
+          if-no-files-found: error
+          retention-days: 14
