@@ -199,9 +199,11 @@ public sealed class ScanOrchestrator
                 100L,
                 findings.Sum(finding => (long)Math.Max(0, finding.Weight)));
 
-            verdict = riskScore >= 75
-                ? Verdict.Malicious
-                : Verdict.Suspicious;
+            verdict = findings.Count == 0
+                ? Verdict.Inconclusive
+                : riskScore >= 75
+                    ? Verdict.Malicious
+                    : Verdict.Suspicious;
 
             return new ScanResult(
                 identity,
@@ -255,7 +257,7 @@ public sealed class ScanOrchestrator
         return new ScanResult(
             identity,
             ScanOutcome.Error,
-            Verdict.Suspicious,
+            Verdict.Inconclusive,
             0,
             Array.Empty<HeuristicFinding>(),
             pe,
@@ -337,7 +339,9 @@ public sealed class ScanOrchestrator
         {
             Verdict.Malicious => ScanOutcome.Malicious,
             Verdict.Suspicious => ScanOutcome.Suspicious,
-            _ => ScanOutcome.Clean
+            Verdict.Inconclusive => ScanOutcome.Inconclusive,
+            Verdict.Clean => ScanOutcome.Inconclusive,
+            _ => ScanOutcome.Error
         };
     }
 }

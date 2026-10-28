@@ -33,7 +33,8 @@ public sealed class PeParserTests
         byte[]? sectionData = null,
         uint? rawSizeOverride = null,
         uint? rawPointerOverride = null,
-        int? forceFileLength = null)
+        int? forceFileLength = null,
+        ushort? machineOverride = null)
     {
         const int peOffset = 0x40;
         const int fileHeaderSize = 20;
@@ -62,7 +63,13 @@ public sealed class PeParserTests
         Put32(peOffset, 0x00004550); // PE signature
 
         int fileHeader = peOffset + 4;
-        Put16(fileHeader, 0x8664);
+        ushort machine = machineOverride ?? (magic switch
+        {
+            0x010B => (ushort)0x014C,
+            0x020B => (ushort)0x8664,
+            _ => (ushort)0x8664
+        });
+        Put16(fileHeader, machine);
         Put16(fileHeader + 2, numberOfSections);
         Put16(fileHeader + 16, optionalHeaderSize);
 
@@ -113,7 +120,8 @@ public sealed class PeParserTests
         byte[]? sectionData = null,
         uint? rawSize = null,
         uint? rawPointer = null,
-        int? forceFileLength = null)
+        int? forceFileLength = null,
+        ushort? machineOverride = null)
     {
         return BuildPe(
             sections,
@@ -123,21 +131,24 @@ public sealed class PeParserTests
             sectionData,
             rawSize,
             rawPointer,
-            forceFileLength);
+            forceFileLength,
+            machineOverride);
     }
 
     private static byte[] BuildPe32Plus(
         ushort sections = 0,
         ushort optionalSize = 240,
         uint directories = 0,
-        byte[]? sectionData = null)
+        byte[]? sectionData = null,
+        ushort? machineOverride = null)
     {
         return BuildPe(
             sections,
             optionalSize,
             0x020B,
             directories,
-            sectionData);
+            sectionData,
+            machineOverride: machineOverride);
     }
 
     [Fact]
@@ -483,6 +494,29 @@ public sealed class PeParserTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Corrupted_When_Coff_Machine_And_Optional_Header_Conflict(
+        bool pe32Plus)
+    {
+        byte[] data = pe32Plus
+            ? BuildPe32Plus(machineOverride: 0x014C)
+            : BuildPe32(machineOverride: 0x8664);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void Valid_Pe_Header_Alignment_Is_Not_Reported_As_Overlay()
     {
@@ -515,6 +549,66 @@ public sealed class PeParserTests
         {
             Assert.Equal(
                 PeFormatStatus.PeValid,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Valid_Data_Directory_Range_Ends_At_Section_Boundary()
+    {
+        byte[] data = BuildPe32(
+            sections: 1,
+            optionalSize: 104,
+            directories: 1,
+            sectionData: new byte[16],
+            rawSize: 16);
+        const int optionalStart = 0x40 + 4 + 20;
+        const int sectionTable = optionalStart + 104;
+        const int firstDirectory = optionalStart + 96;
+        BitConverter.GetBytes(16u).CopyTo(data, sectionTable + 8);
+        BitConverter.GetBytes(0x1000u).CopyTo(data, sectionTable + 12);
+        BitConverter.GetBytes(0x100Fu).CopyTo(data, firstDirectory);
+        BitConverter.GetBytes(1u).CopyTo(data, firstDirectory + 4);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeValid,
+                PeParser.Parse(path).FormatStatus);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Corrupted_When_Data_Directory_Crosses_Section_Boundary()
+    {
+        byte[] data = BuildPe32(
+            sections: 1,
+            optionalSize: 104,
+            directories: 1,
+            sectionData: new byte[16],
+            rawSize: 16);
+        const int optionalStart = 0x40 + 4 + 20;
+        const int sectionTable = optionalStart + 104;
+        const int firstDirectory = optionalStart + 96;
+        BitConverter.GetBytes(16u).CopyTo(data, sectionTable + 8);
+        BitConverter.GetBytes(0x1000u).CopyTo(data, sectionTable + 12);
+        BitConverter.GetBytes(0x100Fu).CopyTo(data, firstDirectory);
+        BitConverter.GetBytes(2u).CopyTo(data, firstDirectory + 4);
+        string path = TempFile(data);
+
+        try
+        {
+            Assert.Equal(
+                PeFormatStatus.PeCorrupted,
                 PeParser.Parse(path).FormatStatus);
         }
         finally
@@ -722,7 +816,7 @@ public sealed class PeParserTests
 
         // The parser reads only the first 4 MiB of this section.
         new Random(1234).NextBytes(
-            section.AsSpan(4 * 1024 * 1024).ToArray());
+            section.AsSpan(4 * 1024 * 1024));
 
         string path = TempFile(
             BuildPe32(sections: 1, sectionData: section));
@@ -751,8 +845,10 @@ public sealed class PeParserTests
 
             Assert.Equal(64, result.File.Hash.Sha256.Length);
             Assert.Equal(PeFormatStatus.PeValid, result.Pe?.FormatStatus);
-            Assert.Equal(Verdict.Suspicious, result.Verdict);
-            Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
+            Assert.Empty(result.Heuristics);
+            Assert.Equal(0, result.RiskScore);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
+            Assert.Equal(ScanOutcome.Inconclusive, result.Outcome);
         }
         finally
         {
@@ -779,7 +875,8 @@ public sealed class PeParserTests
 
             Assert.Equal(PeFormatStatus.NotPe, result.Pe?.FormatStatus);
             Assert.False(peAnalysisRan);
-            Assert.NotEqual(ScanOutcome.Error, result.Outcome);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
+            Assert.Equal(ScanOutcome.Inconclusive, result.Outcome);
         }
         finally
         {
@@ -818,6 +915,7 @@ public sealed class PeParserTests
             HeuristicFinding finding = Assert.Single(findings);
             Assert.Equal(25, finding.Weight);
             Assert.Equal(Verdict.Suspicious, result.Verdict);
+            Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
         }
         finally
         {
@@ -839,7 +937,7 @@ public sealed class PeParserTests
             ScanResult result = await scanner.ScanAsync(path);
 
             Assert.Equal(ScanOutcome.Error, result.Outcome);
-            Assert.NotEqual(Verdict.Clean, result.Verdict);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
             Assert.False(string.IsNullOrWhiteSpace(result.Error));
             Assert.Contains(
                 loggedEvents,
@@ -875,7 +973,7 @@ public sealed class PeParserTests
             ScanResult result = await scanner.ScanAsync(path);
 
             Assert.Equal(ScanOutcome.Error, result.Outcome);
-            Assert.NotEqual(Verdict.Clean, result.Verdict);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
             Assert.Equal(PeFormatStatus.ParseError, result.Pe?.FormatStatus);
         }
         finally
@@ -898,7 +996,7 @@ public sealed class PeParserTests
             ScanResult result = await scanner.ScanAsync(path);
 
             Assert.Equal(ScanOutcome.Error, result.Outcome);
-            Assert.NotEqual(Verdict.Clean, result.Verdict);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
             Assert.Contains(
                 loggedEvents,
                 item => item.Type == "FileScanError");

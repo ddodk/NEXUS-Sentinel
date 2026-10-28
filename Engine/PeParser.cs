@@ -12,6 +12,8 @@ public static class PeParser
     private const uint PeSignature = 0x00004550;
     private const ushort Pe32Magic = 0x010B;
     private const ushort Pe32PlusMagic = 0x020B;
+    private const ushort ImageFileMachineI386 = 0x014C;
+    private const ushort ImageFileMachineAmd64 = 0x8664;
 
     public static PeAnalysisResult Parse(string path)
     {
@@ -64,6 +66,7 @@ public static class PeParser
                 return Corrupted("PE signature is missing.");
 
             long fileHeader = peOffset + 4;
+            ushort machine = ReadUInt16(reader, fileHeader);
             ushort numberOfSections = ReadUInt16(reader, fileHeader + 2);
             ushort optionalHeaderSize = ReadUInt16(reader, fileHeader + 16);
 
@@ -100,6 +103,13 @@ public static class PeParser
             else
             {
                 return Corrupted("Unknown optional header format.");
+            }
+
+            if ((machine == ImageFileMachineI386 && magic == Pe32PlusMagic) ||
+                (machine == ImageFileMachineAmd64 && magic == Pe32Magic))
+            {
+                return Corrupted(
+                    "COFF machine and optional header format are inconsistent.");
             }
 
             if (optionalHeaderSize < minimumSize)

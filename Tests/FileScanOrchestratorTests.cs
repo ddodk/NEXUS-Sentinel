@@ -63,7 +63,7 @@ public sealed class ScanOrchestratorTests
         Put32(peOffset, 0x00004550);
 
         int fileHeader = peOffset + 4;
-        Put16(fileHeader, 0x8664);
+        Put16(fileHeader, 0x014C);
         Put16(fileHeader + 2, sections);
         Put16(fileHeader + 16, optionalSize);
 
@@ -103,8 +103,10 @@ public sealed class ScanOrchestratorTests
             var eventStore = InMemoryEventStore();
             var result = await ScanOrchestrator.AnalyzeFileAsync(path, eventStore);
 
-            Assert.Equal(ScanOutcome.Suspicious, result.Outcome);
-            Assert.Equal(Verdict.Suspicious, result.Verdict);
+            Assert.Equal(ScanOutcome.Inconclusive, result.Outcome);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
+            Assert.Equal(0, result.RiskScore);
+            Assert.Empty(result.Heuristics);
             Assert.Equal(PeFormatStatus.PeValid, result.Pe?.FormatStatus);
             Assert.DoesNotContain(result.Heuristics, item => item.RuleId == "PE_CORRUPTED");
         }
@@ -124,6 +126,8 @@ public sealed class ScanOrchestratorTests
             var result = await ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore());
 
             Assert.Equal(PeFormatStatus.NotPe, result.Pe?.FormatStatus);
+            Assert.Equal(ScanOutcome.Inconclusive, result.Outcome);
+            Assert.Equal(Verdict.Inconclusive, result.Verdict);
             Assert.DoesNotContain(result.Heuristics, item => item.RuleId == "PE_CORRUPTED");
         }
         finally
@@ -168,7 +172,7 @@ public sealed class ScanOrchestratorTests
         var result = await ScanOrchestrator.AnalyzeFileAsync(path, InMemoryEventStore());
 
         Assert.Equal(ScanOutcome.Error, result.Outcome);
-        Assert.NotEqual(Verdict.Clean, result.Verdict);
+        Assert.Equal(Verdict.Inconclusive, result.Verdict);
     }
 
     [Fact]

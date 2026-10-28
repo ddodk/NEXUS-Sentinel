@@ -30,8 +30,14 @@ jobs:
       - name: Restore
         run: dotnet restore NEXUS.Sentinel.csproj
 
+      - name: Restore tests
+        run: dotnet restore Tests/NexusSentinel.Tests.csproj
+
       - name: Build
         run: dotnet build NEXUS.Sentinel.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test Tests/NexusSentinel.Tests.csproj --configuration Release --no-restore
 
       - name: Publish Windows x64 application
         shell: pwsh

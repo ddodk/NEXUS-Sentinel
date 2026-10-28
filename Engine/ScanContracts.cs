@@ -7,7 +7,8 @@ public enum Verdict
 {
     Clean,
     Suspicious,
-    Malicious
+    Malicious,
+    Inconclusive
 }
 
 public enum ScanOutcome
@@ -15,7 +16,8 @@ public enum ScanOutcome
     Clean,
     Suspicious,
     Malicious,
-    Error
+    Error,
+    Inconclusive
 }
 
 public enum PeFormatStatus

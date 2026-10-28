@@ -229,11 +229,15 @@ public partial class MainWindow : Window
                     : $" • Размер: {FormatFileSize(result.File.Hash.SizeBytes)}" +
                       $" • Время: {DateTime.Now:HH:mm:ss}";
 
+                string verdictText = result.Verdict == Verdict.Inconclusive
+                    ? "Неопределённо"
+                    : result.Verdict.ToString();
+
                 ScanResultText.Text = result.Heuristics.Count == 0
-                    ? $"{result.Verdict} • Риск: {result.RiskScore}/100" +
+                    ? $"{verdictText} • Риск: {result.RiskScore}/100" +
                       $"{fileDetails} • {peStatus}. Поддерживаемые индикаторы " +
                       "не обнаружены; безопасность файла не подтверждена."
-                    : $"{result.Verdict} • Риск: {result.RiskScore}/100" +
+                    : $"{verdictText} • Риск: {result.RiskScore}/100" +
                       $"{fileDetails} • {peStatus}. Проверка не заменяет " +
                       "антивирусный анализ.";
 
@@ -242,7 +246,7 @@ public partial class MainWindow : Window
                 {
                     Verdict.Malicious => Brushes.OrangeRed,
                     Verdict.Suspicious => Brushes.Orange,
-                    _ => Brushes.LightGreen
+                    _ => Brushes.LightBlue
                 };
                 ScanResultText.Foreground = ScannerStatusText.Foreground;
 
